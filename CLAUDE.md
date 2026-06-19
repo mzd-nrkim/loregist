@@ -135,7 +135,7 @@ docker compose -f infra/docker-compose.yml up -d   # DB 기동
 
 - **진행 중·미완료 계획**은 `plans/`에 있다. 후속 작업(FTS/hybrid, 자동 갱신, 라이프사이클, `_catalog`/OKF 차용 등)의 상세·착수 조건은 그쪽을 참조. CLAUDE.md에 복제하지 않는다(낡고, 자기 설계와 모순).
 - **완료된 계획·수정보고서·트러블슈팅**은 `plans/done/`으로 저장한다. 임베딩 대상(`done.rglob("*.md")`)이므로 7일 후 vault 이동 후에도 `loregist search`로 검색 가능. 과거 결정·이력이 궁금하면 파일을 훑지 말고 먼저 검색할 것.
-- **가이드성 문서** (라이프사이클 정리·설계 결정 등)는 `docs/`에 영구 보관하고 관련 내용을 CLAUDE.md에 반영한다. `docs/`는 임베딩·rotate 대상이 아님(CLAUDE.md가 단일 참조점).
+- **가이드성 문서** (라이프사이클 정리·설계 결정 등)는 `docs/`에 영구 보관하고 관련 내용을 CLAUDE.md에 반영한다. `docs/`는 임베딩·rotate 대상이 아님(CLAUDE.md가 단일 참조점). **공개 문서는 `docs/public/`에, 그 외 `docs/`는 내부 전용(publish·audit 차단)**.
 - CLAUDE.md는 **안정 지침만** 담는다(아키텍처·명령어·규칙). 단발 상태값(임베딩 건수 등)은 DB에서 직접 확인.
 
 ## 설계 철학 (안정)

@@ -8,3 +8,5 @@ __pycache__/
 projects.toml
 golden-queries.yaml
 plans
+docs/*
+!docs/public/
