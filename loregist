@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+# 중앙 loregist CLI 래퍼
+_SELF="${BASH_SOURCE[0]}"
+# 심볼릭 링크를 따라 실제 스크립트 위치 해석
+while [ -L "$_SELF" ]; do
+  _SELF="$(readlink "$_SELF")"
+done
+SCRIPT_DIR="$(cd "$(dirname "$_SELF")" && pwd)"
+PYTHON="$SCRIPT_DIR/.venv/bin/python"
+
+if [ ! -f "$PYTHON" ]; then
+  echo "오류: venv 없음. $SCRIPT_DIR/.venv 에 venv를 생성하세요." >&2
+  exit 1
+fi
+
+export PYTHONPATH="$SCRIPT_DIR/src"
+
+subcmd="$1"
+shift
+
+export LOREGIST_CWD="$PWD"
+
+case "$subcmd" in
+  embed)
+    cd "$SCRIPT_DIR" && exec "$PYTHON" -m loregist.embed "$@"
+    ;;
+  search)
+    cd "$SCRIPT_DIR" && exec "$PYTHON" -m loregist.search "$@"
+    ;;
+  projects)
+    cd "$SCRIPT_DIR" && exec "$PYTHON" -c "
+import sys, os
+os.environ.setdefault('LOREGIST_CWD', os.environ.get('LOREGIST_CWD', os.getcwd()))
+sys.path.insert(0, '$SCRIPT_DIR/src')
+from loregist.config import dump_projects, infer_project
+flag = sys.argv[1] if len(sys.argv) > 1 else '--json'
+if flag == '--json':
+    print(dump_projects())
+elif flag == '--current':
+    cwd = os.environ.get('LOREGIST_CWD', os.getcwd())
+    try:
+        print(infer_project(cwd))
+    except ValueError as e:
+        print(str(e), file=sys.stderr)
+        sys.exit(1)
+else:
+    print(f'알 수 없는 옵션: {flag}', file=sys.stderr)
+    sys.exit(1)
+" "$@"
+    ;;
+  rotate)
+    cd "$SCRIPT_DIR" && exec "$PYTHON" -m loregist.rotate "$@"
+    ;;
+  status)
+    cd "$SCRIPT_DIR" && exec "$PYTHON" -m loregist.status "$@"
+    ;;
+  similar)
+    cd "$SCRIPT_DIR" && exec "$PYTHON" -m loregist.similar "$@"
+    ;;
+  *)
+    echo "사용법: loregist <embed|search|projects|rotate|status|similar> [옵션]"
+    echo "  embed    [--project P] [--dry-run]   문서/로그 임베딩"
+    echo "  search   <쿼리> [--top-k N] [--project P] [--all-projects] [--plain|--json|--open N|--no-interactive]  시맨틱 검색"
+    echo "  projects [--json|--current]           프로젝트 목록 조회 또는 현재 프로젝트 추론"
+    echo "  rotate   [--project P] [--dry-run]   7일 초과 날짜폴더 → vault 이동 (임베딩 전제)"
+    echo "  status                                프로젝트별 임베딩 현황 대시보드"
+    echo "  similar  <파일경로> [--top-k N]       특정 파일과 유사한 과거 문서 찾기"
+    exit 1
+    ;;
+esac

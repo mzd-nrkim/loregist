@@ -1,0 +1,10 @@
+.venv/
+models/
+__pycache__/
+*.pyc
+.env
+
+# 실 config — 고객 식별자 포함, 커밋 금지 (.example 사용)
+projects.toml
+golden-queries.yaml
+plans

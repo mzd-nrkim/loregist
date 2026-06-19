@@ -1,0 +1,56 @@
+# loregist 프로젝트 레지스트리 — 단일 소스
+# 온보딩: 아래에 [projects.<키>] 블록 추가 (경로는 ~/workspace 기준 상대경로, 생략 시 None)
+# 오프보딩: 블록 삭제 + `loregist embed` (또는 DELETE FROM doc_originals WHERE project='<키>')
+# 확인: `loregist projects --json`
+# 키 의미: cold = embed만(rotate 비대상, cold storage 종착지) / done = embed + rotate 대상(파일명 날짜 기준 7일 후 vault/cold/ 이동)
+#
+# 실 파일(projects.toml)은 .gitignore에 등록되어 있습니다.
+# 이 파일을 복사해 projects.toml을 만들고, 실제 경로·프로젝트명으로 수정하세요:
+#   cp projects.toml.example projects.toml
+#
+# ── 선택적 opt-in 키 ───────────────────────────────────────────────────────────
+#
+# catalog (기본 off — 키 생략 시 비대상):
+#   catalog = true          → {docs_root}/_catalog 로 설정 (docs_root 필수)
+#   catalog = "경로/to/_cat" → 지정 경로 그대로 사용 (WORKSPACE 기준 상대경로 또는 절대경로)
+#   키 생략                 → None (catalog 비대상)
+#
+# 예시:
+#   [projects.my-project]
+#   docs_root = "tools/personal-work/projects/my-project/dev"
+#   catalog   = true       # → {docs_root}/_catalog 자동 생성 대상
+#   # 또는
+#   catalog   = "tools/personal-work/projects/my-project/_catalog"  # 경로 직접 지정
+#
+# vault_cleanup (기본 off — 키 생략 시 비대상, 비가역 삭제이므로 opt-in 필수):
+#   vault_cleanup = true   → 활성화, 기본 보존 기간 90일(VAULT_RETENTION_DAYS) 적용
+#   vault_cleanup = 180    → 활성화, 보존 기간 180일로 override
+#   키 생략                → 비활성 (정리 비대상)
+#
+# 예시:
+#   [projects.my-project]
+#   vault_cleanup = true   # 90일 기본 보존
+#   # 또는
+#   vault_cleanup = 180    # 180일 보존
+#
+# ──────────────────────────────────────────────────────────────────────────────
+
+[projects.project-a]
+docs_root = "workspace/project-a/dev"
+vault     = "logvault/project-a"
+cold      = "logvault/project-a/cold"
+catalog   = true
+vault_cleanup = true
+
+[projects.project-b]
+docs_root = "workspace/project-b/dev"
+vault     = "logvault/project-b"
+cold      = "logvault/project-b/cold"
+vault_cleanup = 180
+
+[projects.demo]
+vault = "logvault/demo"
+done  = "workspace/demo/plans/done"
+
+[projects.personal-work]
+docs_root = "~/workspace/personal-work"
