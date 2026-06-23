@@ -5,20 +5,32 @@ drift.py — catalog 미반영 handbook 파일(drift) 식별 헬퍼
   compute_drift_paths()  순수 함수 (config 비의존, 단위테스트 직접 호출)
   compute_drift()        config.PROJECTS 래퍼
   drift_summary()        JSON 직렬화용 요약 dict 반환
+
+code→doc 방향 안전망 (Phase B, 방식 b):
+  FORCE_CHECK_INTERVAL_DAYS  전수 점검 최대 허용 간격 (기본 7일)
+  compute_drift_paths의 force_check_stamp 파라미터로 활성화.
+  마지막 --force 전수점검 시점 스탬프 파일을 읽어, 기간 초과 시
+  reference=None(전체 drift)으로 폴백하여 전수 점검을 유도한다.
 """
 from __future__ import annotations
 
 import re
 import subprocess
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Optional
 
 from loregist import config
+
+# code→doc 방향 안전망: 전수 점검 최대 허용 간격
+FORCE_CHECK_INTERVAL_DAYS: int = 7
 
 
 def compute_drift_paths(
     handbook_paths: list[Path],
     catalog_dir: "Path | None",
+    *,
+    force_check_stamp: Optional[Path] = None,
 ) -> list[Path]:
     """
     catalog에 아직 반영되지 않은 handbook 파일(drift) 목록을 반환한다.
@@ -29,12 +41,21 @@ def compute_drift_paths(
         확인할 handbook 파일 경로 목록.  존재하지 않는 경로는 무시한다.
     catalog_dir:
         catalog 디렉터리 경로.  None이면 빈 리스트 반환(catalog 비대상 프로젝트).
+    force_check_stamp:
+        (Phase B 안전망) "마지막 --force 전수점검 시점"을 기록한 스탬프 파일 경로.
+        - 파일이 존재하면: mtime을 읽어 FORCE_CHECK_INTERVAL_DAYS(7일) 이상 경과 시
+          reference=None으로 강제 폴백 → 존재하는 모든 handbook 파일이 drift로 표면화.
+        - 파일이 없거나 None이면: 안전망 비활성(기존 동작 유지).
+        이 파라미터는 code→doc 방향 stale 미감지(코드만 바뀌고 handbook mtime 불변)를
+        보완한다. 호출자가 --force 실행 후 이 파일을 갱신하면 7일 주기 전수 점검이 보장된다.
 
     Returns
     -------
     정렬된 list[Path] — mtime이 reference 이후인(또는 reference=None인) handbook 파일.
 
     Reference 결정 규칙 (우선순위):
+      0. force_check_stamp가 있고 FORCE_CHECK_INTERVAL_DAYS 이상 경과
+         → reference=None 강제(전체 drift) — code→doc 방향 안전망
       1. catalog_dir / ".last_catalog_update" (신규) 또는 ".last_update" (구, 하위호환)
          - 40자리 hex SHA → git commit time으로 변환
          - ISO 문자열 → 직접 파싱
@@ -43,6 +64,14 @@ def compute_drift_paths(
     """
     if catalog_dir is None:
         return []
+
+    # 우선순위 0: code→doc 방향 안전망 — force_check_stamp 기간 초과 시 전체 폴백
+    if force_check_stamp is not None and force_check_stamp.exists():
+        last_force_check = datetime.fromtimestamp(force_check_stamp.stat().st_mtime)
+        elapsed = datetime.now() - last_force_check
+        if elapsed >= timedelta(days=FORCE_CHECK_INTERVAL_DAYS):
+            # 전수 점검 기간 초과 → 존재하는 모든 handbook 파일을 drift로 반환
+            return sorted(p for p in handbook_paths if p.exists())
 
     reference: "datetime | None" = None
 
