@@ -317,14 +317,16 @@ def generate(project: str) -> None:
         sys.exit(1)
 
     topics, decisions = _collect_entries(catalog_dir)
+    wrote_any = False  # 실제 파일 반영이 1건이라도 있었는지 — 스탬프 전진 조건
 
     # TOPICS.md 갱신
     topics_md = catalog_dir / "TOPICS.md"
     if topics_md.exists():
         content = topics_md.read_text(encoding="utf-8")
         updated = _update_section(content, _render_topics(topics), topics_md)
-        if updated is not None:
+        if updated is not None and updated != content:
             topics_md.write_text(updated, encoding="utf-8")
+            wrote_any = True
             print(f"[OK] TOPICS.md 갱신 완료 ({len(topics)}건)")
     else:
         print(f"[WARN] {topics_md} 파일이 없습니다 — TOPICS.md 갱신 건너뜀", file=sys.stderr)
@@ -334,8 +336,9 @@ def generate(project: str) -> None:
     if decisions_md.exists():
         content = decisions_md.read_text(encoding="utf-8")
         updated = _update_section(content, _render_decisions(decisions), decisions_md)
-        if updated is not None:
+        if updated is not None and updated != content:
             decisions_md.write_text(updated, encoding="utf-8")
+            wrote_any = True
             print(f"[OK] DECISIONS.md 갱신 완료 ({len(decisions)}건)")
     else:
         print(f"[WARN] {decisions_md} 파일이 없습니다 — DECISIONS.md 갱신 건너뜀", file=sys.stderr)
@@ -347,27 +350,29 @@ def generate(project: str) -> None:
             readme_content = catalog_readme_path.read_text(encoding="utf-8")
             overview_body = _render_overview(topics, decisions)
             updated_readme = _update_heading_section(readme_content, "카탈로그 개요", overview_body)
-            catalog_readme_path.write_text(updated_readme, encoding="utf-8")
-            print(f"[OK] {catalog_readme_path.name} catalog overview 갱신 완료")
+            if updated_readme != readme_content:
+                catalog_readme_path.write_text(updated_readme, encoding="utf-8")
+                wrote_any = True
+                print(f"[OK] {catalog_readme_path.name} catalog overview 갱신 완료")
         else:
             print(
                 f"[WARN] catalog_readme 경로가 존재하지 않습니다: {catalog_readme_path}",
                 file=sys.stderr,
             )
 
-    # drift 기준 갱신 스탬프 기록 (.last_catalog_update)
-    # TOPICS.md / DECISIONS.md 를 모두 쓴 직후, git repo면 HEAD SHA를,
-    # 비-git 환경이면 ISO 타임스탬프를 저장한다.
-    try:
-        sha = subprocess.check_output(
-            ["git", "-C", str(catalog_dir), "rev-parse", "HEAD"],
-            stderr=subprocess.DEVNULL,
-            text=True,
-        ).strip()
-        stamp = sha
-    except Exception:
-        stamp = datetime.now().isoformat()
-    (catalog_dir / ".last_catalog_update").write_text(stamp, encoding="utf-8")
+    # 실제 반영이 1건이라도 있었을 때만 스탬프를 전진시킨다.
+    # 변경 0건이면 기존 스탬프를 유지해 미반영 handbook이 drift 추적에서 사면되는 것을 막는다.
+    if wrote_any:
+        try:
+            sha = subprocess.check_output(
+                ["git", "-C", str(catalog_dir), "rev-parse", "HEAD"],
+                stderr=subprocess.DEVNULL,
+                text=True,
+            ).strip()
+            stamp = sha
+        except Exception:
+            stamp = datetime.now().isoformat()
+        (catalog_dir / ".last_catalog_update").write_text(stamp, encoding="utf-8")
 
 
 def lint_edges(project: str, as_json: bool = False) -> tuple[int, int]:
