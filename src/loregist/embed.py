@@ -148,7 +148,7 @@ def insert_chunks(conn, original_id: int, project: str, path: str, kind: str, ch
             """
             INSERT INTO doc_chunks (original_id, project, source_path, source_kind, chunk_hash, chunk_text, embedding, chunk_index)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (project, source_path, chunk_hash) DO NOTHING
+            ON CONFLICT DO NOTHING
             """,
             (original_id, project, path, kind, c_hash, chunk_text, embedding, chunk_index),
         )

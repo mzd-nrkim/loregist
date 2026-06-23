@@ -2,6 +2,8 @@ BEGIN;
 
 -- 1. 기존 테이블 보존
 ALTER TABLE doc_chunks RENAME TO doc_chunks_legacy;
+-- 기존 시퀀스도 rename해 신규 SERIAL 생성과 충돌 방지
+ALTER SEQUENCE doc_chunks_id_seq RENAME TO doc_chunks_legacy_id_seq;
 
 -- 2. 파티션 부모 테이블 생성
 --    - PRIMARY KEY에 파티션 키(created_at) 포함 필수
@@ -21,9 +23,6 @@ CREATE TABLE doc_chunks (
     PRIMARY KEY (id, created_at),
     UNIQUE (project, source_path, chunk_hash, created_at)
 ) PARTITION BY RANGE (created_at);
-
--- id 시퀀스를 새 테이블의 id 컬럼으로 재소유 설정
-ALTER SEQUENCE doc_chunks_id_seq OWNED BY doc_chunks.id;
 
 -- 3. DEFAULT 파티션
 CREATE TABLE doc_chunks_default PARTITION OF doc_chunks DEFAULT;
@@ -86,7 +85,11 @@ CREATE TABLE doc_chunks_2026_06 PARTITION OF doc_chunks
 -- 5. 데이터 이전
 INSERT INTO doc_chunks SELECT * FROM doc_chunks_legacy;
 
--- 6. 레거시 삭제
+-- 신규 시퀀스 값을 레거시 max(id) 이후로 설정
+SELECT setval('doc_chunks_id_seq', (SELECT MAX(id) FROM doc_chunks_legacy));
+
+-- 6. 레거시 삭제 (시퀀스도 함께 삭제)
 DROP TABLE doc_chunks_legacy;
+DROP SEQUENCE IF EXISTS doc_chunks_legacy_id_seq;
 
 COMMIT;
