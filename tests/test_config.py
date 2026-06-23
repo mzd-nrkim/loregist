@@ -2,7 +2,7 @@
 tests/test_config.py
 T2 — config 유닛 테스트 (실DB 불필요)
 
-T2-1: infer_project — explicit 우선 / docs_root 경로 매칭 / LOREGIST_CWD 환경변수 / 미등록→ValueError
+T2-1: infer_project — explicit 우선 / loregist 경로 매칭 / LOREGIST_CWD 환경변수 / 미등록→ValueError
 T2-2: discover_embed_files — 미존재 경로 project 슬롯 → 빈 리스트 반환
 """
 
@@ -21,8 +21,8 @@ def test_infer_project_explicit_takes_priority():
     """
     explicit 인수가 지정되면 cwd·환경변수를 무시하고 그 값을 그대로 반환한다.
     """
-    result = infer_project(explicit="project-a")
-    assert result == "project-a"
+    result = infer_project(explicit="loregist")
+    assert result == "loregist"
 
 
 @pytest.mark.unit
@@ -35,28 +35,24 @@ def test_infer_project_explicit_arbitrary_value():
 
 
 @pytest.mark.unit
-def test_infer_project_from_cwd(monkeypatch, tmp_path):
+def test_infer_project_from_cwd_loregist(monkeypatch, tmp_path):
     """
-    cwd가 project-a의 docs_root 하위이면
-    docs_root longest-match에 의해 'project-a'를 반환한다.
+    cwd가 loregist docs_root 하위이면
+    docs_root longest-match에 의해 'loregist'를 반환한다.
     """
-    docs_root = tmp_path / "project-a" / "dev"
-    docs_root.mkdir(parents=True)
-    cwd = str(docs_root / "2026-06-16")
+    loregist_docs_root = tmp_path / "loregist" / "dev"
+    loregist_docs_root.mkdir(parents=True)
+    loregist_cwd = str(loregist_docs_root / "2026-06-16")
 
-    fake_projects = dict(vector_config.PROJECTS)
-    fake_projects["project-a"] = {
-        "docs_root": docs_root,
+    fake_cfg = {
         "vault": None,
-        "cold": None,
-        "done": None,
-        "catalog": None,
-        "vault_cleanup": {"active": False, "retention_days": None},
+        "archive": None,
+        "docs_root": loregist_docs_root,
     }
-    monkeypatch.setattr(vector_config, "PROJECTS", fake_projects)
+    monkeypatch.setitem(vector_config.PROJECTS, "loregist", fake_cfg)
 
-    result = infer_project(cwd=cwd)
-    assert result == "project-a"
+    result = infer_project(cwd=loregist_cwd)
+    assert result == "loregist"
 
 
 @pytest.mark.unit
@@ -64,24 +60,19 @@ def test_infer_project_from_env_var(monkeypatch, tmp_path):
     """
     cwd 미지정 시 LOREGIST_CWD 환경변수에서 경로를 읽어 project를 추론한다.
     """
-    docs_root = tmp_path / "project-a" / "dev"
-    docs_root.mkdir(parents=True)
-    cwd_path = str(docs_root / "2026-06-16")
+    loregist_docs_root = tmp_path / "loregist" / "dev"
+    loregist_docs_root.mkdir(parents=True)
+    loregist_path = str(loregist_docs_root / "2026-06-16")
 
-    fake_projects = dict(vector_config.PROJECTS)
-    fake_projects["project-a"] = {
-        "docs_root": docs_root,
+    fake_cfg = {
         "vault": None,
-        "cold": None,
-        "done": None,
-        "catalog": None,
-        "vault_cleanup": {"active": False, "retention_days": None},
+        "archive": None,
+        "docs_root": loregist_docs_root,
     }
-    monkeypatch.setattr(vector_config, "PROJECTS", fake_projects)
-    monkeypatch.setenv("LOREGIST_CWD", cwd_path)
-
+    monkeypatch.setitem(vector_config.PROJECTS, "loregist", fake_cfg)
+    monkeypatch.setenv("LOREGIST_CWD", loregist_path)
     result = infer_project()
-    assert result == "project-a"
+    assert result == "loregist"
 
 
 @pytest.mark.unit
@@ -169,3 +160,88 @@ def test_discover_embed_files_empty_existing_dirs(monkeypatch, tmp_path):
 
     result = discover_embed_files(fake_project)
     assert result == []
+
+
+# ──────────────────────────────────────────────────────────────
+# T_folder: _parse_handbook 폴더 경로 처리 (Plan 3)
+# ──────────────────────────────────────────────────────────────
+
+@pytest.mark.unit
+def test_parse_handbook_folder_path(tmp_path):
+    """
+    폴더 경로 입력 시 하위 .md 파일 전체를 반환한다.
+    """
+    from loregist.config import _parse_handbook
+
+    # 임시 폴더에 .md 파일 2개 생성
+    (tmp_path / "a.md").write_text("a")
+    (tmp_path / "b.md").write_text("b")
+    (tmp_path / "c.txt").write_text("not md")  # 제외 대상
+
+    entry = {"handbook": [{"path": str(tmp_path), "writable": False}]}
+    result = _parse_handbook(entry, "test")
+
+    paths = {r["path"] for r in result}
+    assert tmp_path / "a.md" in paths
+    assert tmp_path / "b.md" in paths
+    assert len(result) == 2
+    assert all(r["writable"] is False for r in result)
+
+
+@pytest.mark.unit
+def test_parse_handbook_empty_folder(tmp_path, capsys):
+    """
+    빈 폴더 입력 시 WARN 출력 + 빈 리스트 반환.
+    """
+    from loregist.config import _parse_handbook
+
+    entry = {"handbook": [{"path": str(tmp_path), "writable": False}]}
+    result = _parse_handbook(entry, "test")
+
+    assert result == []
+    captured = capsys.readouterr()
+    assert "WARN" in captured.err
+    assert "0건" in captured.err
+
+
+@pytest.mark.unit
+def test_parse_handbook_glob_unchanged(tmp_path, monkeypatch):
+    """
+    기존 glob 패턴(*.md)이 여전히 정상 동작한다 (회귀).
+    tmp_path 기반 격리 — 레포 레이아웃에 의존하지 않는다.
+    """
+    import loregist.config as _cfg
+    from loregist.config import _parse_handbook
+
+    # tmp_path 하위에 .md 파일 2개 생성
+    (tmp_path / "a.md").write_text("x")
+    (tmp_path / "b.md").write_text("y")
+
+    # WORKSPACE를 tmp_path로 교체 (monkeypatch가 자동 복원)
+    monkeypatch.setattr(_cfg, "WORKSPACE", tmp_path)
+
+    # tmp_path 기준 상대 glob 패턴
+    entry = {"handbook": [{"path": "*.md", "writable": False}]}
+    result = _parse_handbook(entry, "test")
+
+    # 결과가 비어 있지 않고 모두 .md 경로여야 한다
+    assert len(result) >= 1
+    assert all(str(r["path"]).endswith(".md") for r in result)
+
+
+@pytest.mark.unit
+def test_parse_handbook_single_file_unchanged(tmp_path):
+    """
+    단일 파일 경로가 여전히 정상 동작한다 (회귀).
+    """
+    from loregist.config import _parse_handbook
+
+    f = tmp_path / "note.md"
+    f.write_text("hello")
+
+    entry = {"handbook": [{"path": str(f), "writable": True}]}
+    result = _parse_handbook(entry, "test")
+
+    assert len(result) == 1
+    assert result[0]["path"] == f
+    assert result[0]["writable"] is True

@@ -1,26 +1,27 @@
 # loregist 프로젝트 레지스트리 — 단일 소스
 # 온보딩: 아래에 [projects.<키>] 블록 추가 (경로는 ~/workspace 기준 상대경로, 생략 시 None)
 # 오프보딩: 블록 삭제 + `loregist embed` (또는 DELETE FROM doc_originals WHERE project='<키>')
-# 확인: `loregist projects --json`
+# 확인: `loregist project list`
 # 키 의미: cold = embed만(rotate 비대상, cold storage 종착지) / done = embed + rotate 대상(파일명 날짜 기준 7일 후 vault/cold/ 이동)
 #
 # 실 파일(projects.toml)은 .gitignore에 등록되어 있습니다.
 # 이 파일을 복사해 projects.toml을 만들고, 실제 경로·프로젝트명으로 수정하세요:
 #   cp projects.toml.example projects.toml
+# 또는 `loregist project add` 로 자동 등록할 수 있습니다.
 #
 # ── 선택적 opt-in 키 ───────────────────────────────────────────────────────────
 #
 # catalog (기본 off — 키 생략 시 비대상):
-#   catalog = true          → {docs_root}/_catalog 로 설정 (docs_root 필수)
-#   catalog = "경로/to/_cat" → 지정 경로 그대로 사용 (WORKSPACE 기준 상대경로 또는 절대경로)
+#   catalog = true          → {docs_root}/_wiki 로 설정 (docs_root 필수)
+#   catalog = "경로/to/_wiki" → 지정 경로 그대로 사용 (WORKSPACE 기준 상대경로 또는 절대경로)
 #   키 생략                 → None (catalog 비대상)
 #
 # 예시:
 #   [projects.my-project]
 #   docs_root = "tools/personal-work/projects/my-project/dev"
-#   catalog   = true       # → {docs_root}/_catalog 자동 생성 대상
+#   catalog   = true       # → {docs_root}/_wiki 자동 생성 대상
 #   # 또는
-#   catalog   = "tools/personal-work/projects/my-project/_catalog"  # 경로 직접 지정
+#   catalog   = "tools/personal-work/projects/my-project/_wiki"  # 경로 직접 지정
 #
 # vault_cleanup (기본 off — 키 생략 시 비대상, 비가역 삭제이므로 opt-in 필수):
 #   vault_cleanup = true   → 활성화, 기본 보존 기간 90일(VAULT_RETENTION_DAYS) 적용
@@ -32,6 +33,79 @@
 #   vault_cleanup = true   # 90일 기본 보존
 #   # 또는
 #   vault_cleanup = 180    # 180일 보존
+#
+# hot_days (기본 7일 — 키 생략 시 전역 기본값 ROTATE_TO_VAULT_DAYS 적용):
+#   hot_days = 3     → rotate 기준일을 3일로 override
+#   hot_days = 14    → rotate 기준일을 14일로 override
+#   키 생략          → 전역 기본값(7일) 사용
+#
+# 예시:
+#   [projects.my-project]
+#   hot_days = 3     # 3일 경과 시 vault로 rotate
+#   # 또는
+#   hot_days = 14    # 14일 경과 시 vault로 rotate
+#
+# extensions (기본 ["md", "log", "txt"] — 키 생략 시 기본값 적용):
+#   extensions = ["md", "log", "txt"]  → embed/watch 대상 확장자 선언 (dot 없이)
+#   키 생략                            → 기본값 ["md", "log", "txt"] 적용
+#
+# 예시:
+#   [projects.my-project]
+#   extensions = ["md", "log"]   # txt 제외, md·log만 대상
+#   # 또는
+#   extensions = ["md", "log", "txt", "rst"]  # rst 추가
+#
+# auto_handbook_update / auto_catalog_update (각 기본 false — 키 생략 시 false):
+#   auto_handbook_update = true  → drift 발생 시 handbook-update(산문) 무인 자동 실행
+#   auto_catalog_update  = true  → drift 발생 시 catalog-update(인덱스) 무인 자동 실행
+#   둘 다 true → wiki-update(handbook→catalog) 무인 자동 / 둘 다 false(기본) → 갱신 제안만
+#
+# 예시:
+#   [projects.my-project]
+#   auto_handbook_update = true   # handbook 자동 갱신 활성화
+#   auto_catalog_update  = true   # catalog 자동 갱신 활성화 (둘 다 true → wiki-update)
+#   # 또는
+#   auto_catalog_update  = true   # catalog만 자동 갱신 (handbook은 제안 모드 유지)
+#
+# handbook (기본 [] — 키 생략 시 비대상):
+#   LLM이 스캔할 산문 문서 목록 — wiki-update 스킬의 갱신 소스.
+#   handbook 선언 시 catalog가 암묵 활성화된다 (docs_root 또는 catalog 키 필수;
+#   둘 다 없으면 경고 후 암묵 활성화 불가).
+#   각 항목은 문자열(경로) 또는 {path, writable, update_when} inline table 형식이며
+#   글로브 패턴(*/.**)을 지원한다. 글로브 패턴은 WORKSPACE 기준으로 확장된다.
+#
+#   문자열 형식: writable=false, update_when=None 으로 고정
+#   dict 형식 키:
+#     path        (필수) — WORKSPACE 기준 상대경로 또는 절대경로
+#     writable    (선택, 기본 false) — true 이면 임베딩 시 해당 소스 파일에 메타 기록 허용
+#     update_when (선택, 기본 None) — handbook-update 스킬이 git diff 변경 맥락이 이 조건에 부합하는지 LLM으로 판정하는 **자연어 조건**(예: "기능 추가·변경 또는 설치/사용법 변경 시", "아키텍처·모듈 구조 변경 시")
+#
+#   NOTE: wiki_sources, wiki 키는 deprecated — handbook으로 마이그레이션하세요.
+#
+# 예시:
+#   [projects.my-project]
+#   docs_root = "workspace/my-project/dev"
+#   # 문자열 형식 (단순 경로 참조):
+#   handbook = ["path/to/README.md", "path/to/ARCHITECTURE.md"]  # 문자열 목록
+#   # 또는 세부 설정:
+#   handbook = [{path = "path/to/doc.md", writable = true, update_when = "변경 조건"}]
+#   # 키 생략 → catalog-update 소스 없음
+#
+#   # 글로브 패턴 사용:
+#   handbook = [
+#     "shared/docs/overview.md",
+#     "shared/docs/adr/*.md",
+#   ]
+#   # 또는 dict 형식 (writable/update_when 지정):
+#   handbook = [
+#     {path = "shared/docs/overview.md", writable = false, update_when = "기능 추가·변경 또는 설치/사용법 변경 시"},
+#     {path = "shared/docs/api-ref.md",  writable = true},
+#   ]
+#   # 또는 혼합 형식:
+#   handbook = [
+#     "shared/docs/overview.md",
+#     {path = "shared/docs/changelog.md", writable = true, update_when = "아키텍처·모듈 구조 변경 시"},
+#   ]
 #
 # ──────────────────────────────────────────────────────────────────────────────
 

@@ -5,20 +5,25 @@ rotate.py 유닛·통합 테스트
 Unit (DB 불필요):
   R-1: parse_folder_date — 날짜 문자열 파싱 / 비날짜 None
   R-2: discover_rotate_targets — 임계일 초과 폴더만 반환
-  R-3: discover_rotate_targets — _catalog 제외
+  R-3: discover_rotate_targets — _wiki 제외
   R-4: rotate_file — vault=None → False, 파일 무변경
   R-5: git_rm — untracked 파일 → False
   R-7: discover_done_rotate_targets — 임계일 기준 done 파일 포함/제외
   R-8: rotate_done_file — vault=None → False, 파일 무변경
   R-9: cold 키만 있는 프로젝트 → discover_done_rotate_targets 빈 리스트 (cold 비대상 불변식)
   R-10: done 경로 *.md 가 discover_embed_files 에 포함됨
+  E-1a: extensions=["md"] → *.md만 수집, .txt/.log 제외
+  E-1b: extensions=["md","log","txt"] → .md/.log/.txt 모두 수집, .png 제외
+  E-3a: _is_content_empty — 메타파일만 있는 폴더 → True
+  E-3b: _is_content_empty — 콘텐츠 파일 있는 폴더 → False
+  E-3c: _is_content_empty — 완전히 빈 폴더 → True
 
 Integration (pgvector 기동 전제):
   R-6: is_embedded — INSERT 후 True / 미존재 경로 False
 """
 
 import subprocess
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -26,6 +31,8 @@ import pytest
 import loregist.config as vector_config
 from loregist.config import ROTATE_TO_VAULT_DAYS
 from loregist.rotate import (
+    _IGNORE_FOR_EMPTY,
+    _is_content_empty,
     discover_done_rotate_targets,
     discover_rotate_targets,
     git_rm,
@@ -80,6 +87,7 @@ def test_discover_rotate_targets_threshold(monkeypatch, tmp_path):
             "vault": tmp_path / "v",
             "done": None,
             "cold": None,
+            "hot_days": 7,
         },
     )
 
@@ -95,19 +103,19 @@ def test_discover_rotate_targets_threshold(monkeypatch, tmp_path):
 
 
 # ──────────────────────────────────────────────────────────────
-# R-3: discover_rotate_targets — _catalog 제외
+# R-3: discover_rotate_targets — _wiki 제외
 # ──────────────────────────────────────────────────────────────
 
 
 @pytest.mark.unit
 def test_discover_rotate_targets_excludes_catalog(monkeypatch, tmp_path):
     """
-    _catalog 하위 파일은 날짜 폴더가 있어도 반환되지 않는다.
+    _wiki 하위 파일은 날짜 폴더가 있어도 반환되지 않는다.
     """
     docs = tmp_path / "docs"
     docs.mkdir()
 
-    for special_dir in ("_catalog",):
+    for special_dir in ("_wiki",):
         sub = docs / special_dir / "2020-01-01"
         sub.mkdir(parents=True)
         (sub / "x.md").write_text("x" * 120)
@@ -120,6 +128,7 @@ def test_discover_rotate_targets_excludes_catalog(monkeypatch, tmp_path):
             "vault": tmp_path / "v",
             "done": None,
             "cold": None,
+            "hot_days": 7,
         },
     )
 
@@ -151,6 +160,7 @@ def test_rotate_file_vault_none_skips(monkeypatch, tmp_path):
             "vault": None,
             "done": None,
             "cold": None,
+            "hot_days": 7,
         },
     )
 
@@ -244,7 +254,7 @@ def test_discover_done_rotate_targets_threshold(monkeypatch, tmp_path):
     monkeypatch.setitem(
         vector_config.PROJECTS,
         "__t_done__",
-        {"done": done_dir, "vault": tmp_path / "v", "docs_root": None, "cold": None},
+        {"done": done_dir, "vault": tmp_path / "v", "docs_root": None, "cold": None, "hot_days": 7},
     )
 
     targets = discover_done_rotate_targets("__t_done__")
@@ -271,7 +281,7 @@ def test_rotate_done_file_vault_none_skips(monkeypatch, tmp_path):
     monkeypatch.setitem(
         vector_config.PROJECTS,
         "__t_dv__",
-        {"done": done_dir, "vault": None, "docs_root": None, "cold": None},
+        {"done": done_dir, "vault": None, "docs_root": None, "cold": None, "hot_days": 7},
     )
 
     result = rotate_done_file(src, "__t_dv__")
@@ -299,7 +309,7 @@ def test_cold_not_rotate_target(monkeypatch, tmp_path):
     monkeypatch.setitem(
         vector_config.PROJECTS,
         "__t_cold_only__",
-        {"cold": cold_dir, "vault": tmp_path / "v", "docs_root": None, "done": None},
+        {"cold": cold_dir, "vault": tmp_path / "v", "docs_root": None, "done": None, "hot_days": 7},
     )
 
     targets = discover_done_rotate_targets("__t_cold_only__")
@@ -326,9 +336,190 @@ def test_done_included_in_embed_files(monkeypatch, tmp_path):
     monkeypatch.setitem(
         vector_config.PROJECTS,
         "__t_embed_done__",
-        {"done": done_dir, "vault": None, "docs_root": None, "cold": None},
+        {"done": done_dir, "vault": None, "docs_root": None, "cold": None, "hot_days": 7},
     )
 
     files = discover_embed_files("__t_embed_done__")
     paths = [Path(p) for p, _ in files]
     assert md in paths, "done 경로 md 가 embed 대상에 포함되어야 함"
+
+
+# ──────────────────────────────────────────────────────────────
+# C-2: discover_rotate_targets — hot_days per-project override
+# ──────────────────────────────────────────────────────────────
+
+
+@pytest.mark.unit
+def test_discover_rotate_targets_hot_days_override(monkeypatch, tmp_path):
+    """
+    프로젝트별 hot_days=3 override 시 3일 초과 폴더만 rotate 대상이 된다.
+    2일 경과 폴더는 제외, 4일 경과 폴더는 포함되어야 한다.
+    """
+    docs = tmp_path / "docs"
+    docs.mkdir()
+
+    four_days_ago = date.today() - timedelta(days=4)
+    two_days_ago = date.today() - timedelta(days=2)
+
+    for d in (four_days_ago, two_days_ago):
+        folder = docs / d.isoformat()
+        folder.mkdir()
+        (folder / "f.md").write_text("x" * 120)
+
+    monkeypatch.setitem(
+        vector_config.PROJECTS,
+        "__t_hotdays_override__",
+        {
+            "docs_root": docs,
+            "vault": tmp_path / "v",
+            "done": None,
+            "cold": None,
+            "hot_days": 3,
+        },
+    )
+
+    targets = discover_rotate_targets("__t_hotdays_override__")
+    target_paths = [p for p, _ in targets]
+
+    # 4일 경과 폴더 → hot_days=3 초과이므로 포함
+    assert docs / four_days_ago.isoformat() / "f.md" in target_paths
+    # 2일 경과 폴더 → hot_days=3 미만이므로 제외
+    assert docs / two_days_ago.isoformat() / "f.md" not in target_paths
+
+
+# ──────────────────────────────────────────────────────────────
+# C-3: _parse_hot_days 단위 테스트
+# ──────────────────────────────────────────────────────────────
+
+
+@pytest.mark.unit
+def test_parse_hot_days(capsys):
+    """
+    _parse_hot_days의 6가지 케이스를 검증한다:
+    - 키 없음 → ROTATE_TO_VAULT_DAYS 반환
+    - bool → ROTATE_TO_VAULT_DAYS 반환 + stderr WARN
+    - 0 → ROTATE_TO_VAULT_DAYS 반환 + stderr WARN
+    - 음수 → ROTATE_TO_VAULT_DAYS 반환 + stderr WARN
+    - 문자열 → ROTATE_TO_VAULT_DAYS 반환 + stderr WARN
+    - 양의 정수 → 해당 값 반환
+    """
+    from loregist.config import ROTATE_TO_VAULT_DAYS, _parse_hot_days
+
+    # 키 없음 → 기본값, WARN 없음
+    assert _parse_hot_days({}, "test_proj") == ROTATE_TO_VAULT_DAYS
+    captured = capsys.readouterr()
+    assert "[WARN]" not in captured.err
+
+    # bool(True) → 기본값 + WARN
+    assert _parse_hot_days({"hot_days": True}, "test_proj") == ROTATE_TO_VAULT_DAYS
+    captured = capsys.readouterr()
+    assert "[WARN]" in captured.err
+
+    # 0 → 기본값 + WARN
+    assert _parse_hot_days({"hot_days": 0}, "test_proj") == ROTATE_TO_VAULT_DAYS
+    captured = capsys.readouterr()
+    assert "[WARN]" in captured.err
+
+    # 음수 → 기본값 + WARN
+    assert _parse_hot_days({"hot_days": -1}, "test_proj") == ROTATE_TO_VAULT_DAYS
+    captured = capsys.readouterr()
+    assert "[WARN]" in captured.err
+
+    # 문자열 → 기본값 + WARN
+    assert _parse_hot_days({"hot_days": "abc"}, "test_proj") == ROTATE_TO_VAULT_DAYS
+    captured = capsys.readouterr()
+    assert "[WARN]" in captured.err
+
+    # 유효 양의 정수 → 해당 값, WARN 없음
+    assert _parse_hot_days({"hot_days": 3}, "test_proj") == 3
+    captured = capsys.readouterr()
+    assert "[WARN]" not in captured.err
+
+
+# ──────────────────────────────────────────────────────────────
+# E-1a: discover_rotate_targets — extensions=["md"] 필터
+# ──────────────────────────────────────────────────────────────
+
+
+@pytest.mark.unit
+def test_discover_rotate_targets_extensions_filter(monkeypatch, tmp_path):
+    """extensions=["md"] → *.md만 수집, .txt/.log 제외."""
+    old_date = (datetime.today() - timedelta(days=30)).strftime("%Y-%m-%d")
+    date_dir = tmp_path / old_date
+    date_dir.mkdir()
+    (date_dir / "note.md").write_text("md")
+    (date_dir / "log.log").write_text("log")
+    (date_dir / "doc.txt").write_text("txt")
+    (date_dir / "image.png").write_text("png")
+    monkeypatch.setitem(vector_config.PROJECTS, "test-rotate", {
+        "docs_root": tmp_path, "vault": tmp_path / "vault",
+        "hot_days": 7, "extensions": ["md"],
+    })
+    result_paths = [src for src, _ in discover_rotate_targets("test-rotate")]
+    names = {p.name for p in result_paths}
+    assert "note.md" in names
+    assert "log.log" not in names
+    assert "doc.txt" not in names
+    assert "image.png" not in names
+
+
+# ──────────────────────────────────────────────────────────────
+# E-1b: discover_rotate_targets — extensions=["md","log","txt"] 필터
+# ──────────────────────────────────────────────────────────────
+
+
+@pytest.mark.unit
+def test_discover_rotate_targets_extensions_default(monkeypatch, tmp_path):
+    """extensions=["md","log","txt"] → .md/.log/.txt 모두 수집, .png 제외."""
+    old_date = (datetime.today() - timedelta(days=30)).strftime("%Y-%m-%d")
+    date_dir = tmp_path / old_date
+    date_dir.mkdir()
+    (date_dir / "note.md").write_text("md")
+    (date_dir / "log.log").write_text("log")
+    (date_dir / "doc.txt").write_text("txt")
+    (date_dir / "image.png").write_text("png")
+    monkeypatch.setitem(vector_config.PROJECTS, "test-rotate", {
+        "docs_root": tmp_path, "vault": tmp_path / "vault",
+        "hot_days": 7, "extensions": ["md", "log", "txt"],
+    })
+    result_paths = [src for src, _ in discover_rotate_targets("test-rotate")]
+    names = {p.name for p in result_paths}
+    assert "note.md" in names
+    assert "log.log" in names
+    assert "doc.txt" in names
+    assert "image.png" not in names
+
+
+# ──────────────────────────────────────────────────────────────
+# E-3a: _is_content_empty — 메타파일만 있는 폴더
+# ──────────────────────────────────────────────────────────────
+
+
+@pytest.mark.unit
+def test_is_content_empty_with_meta_only(tmp_path):
+    """메타파일만 있는 폴더는 비어있다고 판정."""
+    (tmp_path / ".DS_Store").write_text("")
+    assert _is_content_empty(tmp_path)
+
+
+# ──────────────────────────────────────────────────────────────
+# E-3b: _is_content_empty — 콘텐츠 파일 있는 폴더
+# ──────────────────────────────────────────────────────────────
+
+
+@pytest.mark.unit
+def test_is_content_empty_with_content(tmp_path):
+    """콘텐츠 파일이 있는 폴더는 비어있지 않다고 판정."""
+    (tmp_path / "note.md").write_text("content")
+    assert not _is_content_empty(tmp_path)
+
+
+# ──────────────────────────────────────────────────────────────
+# E-3c: _is_content_empty — 완전히 빈 폴더
+# ──────────────────────────────────────────────────────────────
+
+
+@pytest.mark.unit
+def test_is_content_empty_truly_empty(tmp_path):
+    """완전히 빈 폴더도 비어있다고 판정."""
+    assert _is_content_empty(tmp_path)

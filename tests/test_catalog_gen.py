@@ -309,7 +309,7 @@ def test_generate_topics_rendered(tmp_path, monkeypatch):
     type: topic 파일 1건 → TOPICS.md AUTO 영역이 갱신된다.
     D-1: type: topic frontmatter 렌더링 분기 확인.
     """
-    catalog_dir = tmp_path / "_catalog"
+    catalog_dir = tmp_path / "_wiki"
     catalog_dir.mkdir()
 
     # topic 파일 생성
@@ -344,7 +344,7 @@ def test_generate_decisions_rendered(tmp_path, monkeypatch):
     type: decision 파일 1건 → DECISIONS.md AUTO 영역이 갱신된다.
     D-1: type: decision frontmatter 렌더링 분기 확인.
     """
-    catalog_dir = tmp_path / "_catalog"
+    catalog_dir = tmp_path / "_wiki"
     catalog_dir.mkdir()
 
     _make_decision_md(catalog_dir, "decision-001.md", id="D-001", title="pgvector 선택")
@@ -372,7 +372,7 @@ def test_generate_preserves_manual_text_outside_markers(tmp_path, monkeypatch):
     """
     D-3: 마커 밖 수동 텍스트가 재실행 후에도 보존된다.
     """
-    catalog_dir = tmp_path / "_catalog"
+    catalog_dir = tmp_path / "_wiki"
     catalog_dir.mkdir()
 
     _make_topic_md(catalog_dir, "topic-001.md", id="T-002")
@@ -406,7 +406,7 @@ def test_generate_zero_files(tmp_path, monkeypatch):
     """
     D-Cardinality: 문서 0개 → 빈 마커(헤더만 있는 표)로 렌더링, 에러 없이 종료.
     """
-    catalog_dir = tmp_path / "_catalog"
+    catalog_dir = tmp_path / "_wiki"
     catalog_dir.mkdir()
 
     topics_md = catalog_dir / "TOPICS.md"
@@ -433,7 +433,7 @@ def test_generate_no_marker_warns_and_does_not_overwrite(tmp_path, monkeypatch, 
     """
     D-3: 마커 없는 파일은 경고만 출력하고 덮어쓰지 않는다.
     """
-    catalog_dir = tmp_path / "_catalog"
+    catalog_dir = tmp_path / "_wiki"
     catalog_dir.mkdir()
 
     _make_topic_md(catalog_dir, "topic-001.md", id="T-001")
@@ -460,3 +460,290 @@ def test_generate_no_marker_warns_and_does_not_overwrite(tmp_path, monkeypatch, 
 
     captured = capsys.readouterr()
     assert "WARN" in captured.err
+
+
+# ──────────────────────────────────────────────────────────────
+# Phase G: _render_overview / _update_heading_section / generate() README 연동
+# ──────────────────────────────────────────────────────────────
+
+import loregist.catalog_gen as cg
+from loregist.catalog_gen import _render_overview, _update_heading_section, lint_edges
+
+
+def _topic(id_: str, file_: str = None) -> dict:
+    return {
+        "id": id_,
+        "type": "topic",
+        "_file": file_ or f"{id_}.md",
+        "status": "active",
+        "tags": [],
+        "related": [],
+        "summary": f"{id_} 요약",
+    }
+
+
+def _decision(id_: str, file_: str = None) -> dict:
+    return {
+        "id": id_,
+        "type": "decision",
+        "_file": file_ or f"{id_}.md",
+        "status": "active",
+        "related": [],
+        "title": f"{id_} 결정",
+        "date": "2026-06-01",
+    }
+
+
+@pytest.mark.unit
+def test_render_overview_contains_counts():
+    """_render_overview 출력에 topic·decision 개수가 포함되는지 확인"""
+    topics = [_topic("T-001"), _topic("T-002")]
+    decisions = [_decision("D-001")]
+    out = _render_overview(topics, decisions)
+    assert "Topics" in out and "2" in out
+    assert "Decisions" in out and "1" in out
+
+
+@pytest.mark.unit
+def test_render_overview_empty_lists():
+    """topics/decisions 모두 빈 리스트 → '없음' 출력"""
+    out = _render_overview([], [])
+    assert "없음" in out
+
+
+@pytest.mark.unit
+def test_update_heading_section_replaces_existing(tmp_path):
+    """헤딩이 존재할 때 해당 구간만 교체, 다음 섹션 보존"""
+    content = "# 프로젝트\n\n소개\n\n## 카탈로그 개요\n\n구형 내용\n\n## 설치\n\n설치 안내\n"
+    new_body = "새 내용"
+    result = _update_heading_section(content, "카탈로그 개요", new_body)
+    assert "새 내용" in result
+    assert "구형 내용" not in result
+    assert "## 설치" in result  # 다음 섹션 보존
+    assert "설치 안내" in result
+
+
+@pytest.mark.unit
+def test_update_heading_section_appends_when_missing(tmp_path):
+    """헤딩 부재 시 문서 끝에 1회 추가"""
+    content = "# 프로젝트\n\n소개\n\n## 설치\n\n설치 안내\n"
+    new_body = "신규 overview"
+    result = _update_heading_section(content, "카탈로그 개요", new_body)
+    assert "## 카탈로그 개요" in result
+    assert "신규 overview" in result
+    assert result.count("## 카탈로그 개요") == 1  # 중복 없음
+
+
+@pytest.mark.unit
+def test_update_heading_section_idempotent(tmp_path):
+    """재실행 시 append 아닌 교체 (idempotency)"""
+    content = "# 프로젝트\n\n## 카탈로그 개요\n\n구형 내용\n\n## 설치\n\n설치 안내\n"
+    new_body = "새 내용"
+    result1 = _update_heading_section(content, "카탈로그 개요", new_body)
+    result2 = _update_heading_section(result1, "카탈로그 개요", new_body)
+    assert result1 == result2  # 멱등
+    assert result2.count("## 카탈로그 개요") == 1
+
+
+# ──────────────────────────────────────────────────────────────
+# Phase B: lint_edges 테스트
+# ──────────────────────────────────────────────────────────────
+
+def _make_catalog_md(catalog_dir: Path, name: str, doc_id: str, doc_type: str = "topic", edges=None, related=None) -> Path:
+    """lint 테스트용 카탈로그 md 파일 생성 헬퍼."""
+    lines = [f"type: {doc_type}", f"id: {doc_id}"]
+    if edges is not None:
+        if edges:
+            edge_items = "\n".join(f"  - {e}" for e in edges)
+            lines.append(f"edges:\n{edge_items}")
+        else:
+            lines.append("edges: []")
+    if related is not None:
+        if related:
+            related_items = "\n".join(f"  - {r}" for r in related)
+            lines.append(f"related:\n{related_items}")
+    yaml_block = "\n".join(lines)
+    content = f"---\n{yaml_block}\n---\n# {doc_id}\n"
+    p = catalog_dir / name
+    p.write_text(content, encoding="utf-8")
+    return p
+
+
+def _fake_lint_cfg(catalog_dir: Path) -> dict:
+    return {
+        "catalog": catalog_dir,
+        "catalog_readme": None,
+        "vault": None,
+        "cold": None,
+        "done": None,
+        "docs_root": None,
+        "vault_cleanup": {"active": False, "retention_days": None},
+    }
+
+
+@pytest.mark.unit
+def test_lint_edges_dangling(tmp_path, monkeypatch):
+    """존재하지 않는 id를 edges로 참조 → error 1건."""
+    catalog_dir = tmp_path / "_wiki"
+    catalog_dir.mkdir()
+    _make_catalog_md(catalog_dir, "T-001.md", "T-001", edges=["X-999"])
+    monkeypatch.setitem(config_module.PROJECTS, "__lint_dangling__", _fake_lint_cfg(catalog_dir))
+    error_count, warning_count = lint_edges("__lint_dangling__")
+    assert error_count >= 1
+    assert warning_count == 0
+
+
+@pytest.mark.unit
+def test_lint_edges_asymmetric(tmp_path, monkeypatch):
+    """A→B만 있고 B→A 없음 → error + 역엣지 제안."""
+    catalog_dir = tmp_path / "_wiki"
+    catalog_dir.mkdir()
+    _make_catalog_md(catalog_dir, "T-001.md", "T-001", edges=["D-001"])
+    _make_catalog_md(catalog_dir, "D-001.md", "D-001", doc_type="decision", edges=[])
+    monkeypatch.setitem(config_module.PROJECTS, "__lint_asymmetric__", _fake_lint_cfg(catalog_dir))
+    error_count, warning_count = lint_edges("__lint_asymmetric__")
+    assert error_count >= 1
+    assert warning_count == 0
+
+
+@pytest.mark.unit
+def test_lint_edges_self_ref(tmp_path, monkeypatch):
+    """자기 id를 edges에 포함 → error."""
+    catalog_dir = tmp_path / "_wiki"
+    catalog_dir.mkdir()
+    _make_catalog_md(catalog_dir, "T-001.md", "T-001", edges=["T-001"])
+    monkeypatch.setitem(config_module.PROJECTS, "__lint_selfref__", _fake_lint_cfg(catalog_dir))
+    error_count, warning_count = lint_edges("__lint_selfref__")
+    assert error_count >= 1
+    assert warning_count == 0
+
+
+@pytest.mark.unit
+def test_lint_edges_orphan(tmp_path, monkeypatch):
+    """edges 빈 값 + 피참조 0 → warning (error 아님), 종료코드 정상."""
+    catalog_dir = tmp_path / "_wiki"
+    catalog_dir.mkdir()
+    _make_catalog_md(catalog_dir, "T-001.md", "T-001", edges=[])
+    monkeypatch.setitem(config_module.PROJECTS, "__lint_orphan__", _fake_lint_cfg(catalog_dir))
+    error_count, warning_count = lint_edges("__lint_orphan__")
+    assert error_count == 0
+    assert warning_count >= 1
+
+
+@pytest.mark.unit
+def test_lint_edges_severity_separation(tmp_path, monkeypatch):
+    """orphan만 있는 그래프 → error 0 / warning N."""
+    catalog_dir = tmp_path / "_wiki"
+    catalog_dir.mkdir()
+    _make_catalog_md(catalog_dir, "T-001.md", "T-001", edges=[])
+    _make_catalog_md(catalog_dir, "T-002.md", "T-002", edges=[])
+    monkeypatch.setitem(config_module.PROJECTS, "__lint_severity__", _fake_lint_cfg(catalog_dir))
+    error_count, warning_count = lint_edges("__lint_severity__")
+    assert error_count == 0
+    assert warning_count == 2
+
+
+@pytest.mark.unit
+def test_lint_edges_clean_graph(tmp_path, monkeypatch):
+    """양방향 완비 픽스처 → error 0, warning 0."""
+    catalog_dir = tmp_path / "_wiki"
+    catalog_dir.mkdir()
+    _make_catalog_md(catalog_dir, "T-001.md", "T-001", edges=["D-001"])
+    _make_catalog_md(catalog_dir, "D-001.md", "D-001", doc_type="decision", edges=["T-001"])
+    monkeypatch.setitem(config_module.PROJECTS, "__lint_clean__", _fake_lint_cfg(catalog_dir))
+    error_count, warning_count = lint_edges("__lint_clean__")
+    assert error_count == 0
+    assert warning_count == 0
+
+
+@pytest.mark.unit
+def test_lint_edges_related_no_interference(tmp_path, monkeypatch):
+    """related에 소스 파일 경로가 있어도 lint가 dangling으로 오탐하지 않음."""
+    catalog_dir = tmp_path / "_wiki"
+    catalog_dir.mkdir()
+    # related에 경로값, edges는 정상 양방향
+    _make_catalog_md(catalog_dir, "T-001.md", "T-001", edges=["D-001"], related=["src/some/file.py"])
+    _make_catalog_md(catalog_dir, "D-001.md", "D-001", doc_type="decision", edges=["T-001"], related=["docs/ref.md"])
+    monkeypatch.setitem(config_module.PROJECTS, "__lint_related__", _fake_lint_cfg(catalog_dir))
+    error_count, warning_count = lint_edges("__lint_related__")
+    assert error_count == 0
+    assert warning_count == 0
+
+
+@pytest.mark.unit
+def test_lint_edges_json_schema(tmp_path, monkeypatch, capsys):
+    """--json 출력 스키마: 위반 목록 구조 + rule 필드 검증."""
+    import json
+    catalog_dir = tmp_path / "_wiki"
+    catalog_dir.mkdir()
+    # dangling 1건 발생
+    _make_catalog_md(catalog_dir, "T-001.md", "T-001", edges=["X-999"])
+    monkeypatch.setitem(config_module.PROJECTS, "__lint_json__", _fake_lint_cfg(catalog_dir))
+    error_count, warning_count = lint_edges("__lint_json__", as_json=True)
+    captured = capsys.readouterr()
+    # JSON 파싱 — 마지막 JSON 블록 추출
+    lines = captured.out.strip().split("\n")
+    # JSON 블록 찾기: '{' 로 시작하는 줄부터
+    json_start = None
+    for i, line in enumerate(lines):
+        if line.strip() == "{":
+            json_start = i
+            break
+    assert json_start is not None, f"JSON 블록을 찾지 못함. 출력:\n{captured.out}"
+    json_text = "\n".join(lines[json_start:])
+    data = json.loads(json_text)
+    assert "errors" in data
+    assert "warnings" in data
+    assert "error_count" in data
+    assert "warning_count" in data
+    assert data["error_count"] >= 1
+    assert len(data["errors"]) >= 1
+    assert "rule" in data["errors"][0]
+    assert data["errors"][0]["rule"] == "dangling"
+
+
+@pytest.mark.unit
+def test_lint_edges_empty_wiki(tmp_path, monkeypatch):
+    """빈 _wiki/ (T/D 0개) → error 0, 정상 종료."""
+    catalog_dir = tmp_path / "_wiki"
+    catalog_dir.mkdir()
+    monkeypatch.setitem(config_module.PROJECTS, "__lint_empty__", _fake_lint_cfg(catalog_dir))
+    error_count, warning_count = lint_edges("__lint_empty__")
+    assert error_count == 0
+    assert warning_count == 0
+
+
+@pytest.mark.unit
+def test_catalog_readme_not_declared_skips(tmp_path, monkeypatch):
+    """catalog_readme 미선언 → 대상 문서 무수정 (off 동작)"""
+    catalog_dir = tmp_path / "_wiki"
+    catalog_dir.mkdir()
+    # TOPICS.md / DECISIONS.md 생성 (AUTO 마커 포함)
+    (catalog_dir / "TOPICS.md").write_text(
+        "---\nid: topics-index\ntype: index\ndate: 2026-06-19\n---\n"
+        "# TOPICS\n\n<!-- AUTO:START -->\n<!-- AUTO:END -->\n",
+        encoding="utf-8",
+    )
+    (catalog_dir / "DECISIONS.md").write_text(
+        "---\nid: decisions-index\ntype: index\ndate: 2026-06-19\n---\n"
+        "# DECISIONS\n\n<!-- AUTO:START -->\n<!-- AUTO:END -->\n",
+        encoding="utf-8",
+    )
+    readme = tmp_path / "README.md"
+    readme.write_text("# 프로젝트\n\n소개\n", encoding="utf-8")
+
+    fake_cfg = {
+        "catalog": catalog_dir,
+        "catalog_readme": None,  # 미선언
+        "vault": None,
+        "cold": None,
+        "done": None,
+        "docs_root": None,
+        "vault_cleanup": {"active": False, "retention_days": None},
+    }
+    monkeypatch.setitem(config_module.PROJECTS, "__test_readme_off__", fake_cfg)
+
+    cg.generate("__test_readme_off__")
+
+    # README는 무수정
+    assert readme.read_text(encoding="utf-8") == "# 프로젝트\n\n소개\n"

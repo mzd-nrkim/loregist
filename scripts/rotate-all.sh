@@ -2,9 +2,9 @@
 # loregist rotate 전 프로젝트 실행 + 변경 있으면 자동 commit
 set -euo pipefail
 
-LOREGIST="${LOREGIST_DIR:-$HOME/workspace/loregist}/loregist"
-TOOLS="${LOREGIST_TOOLS_DIR:-$HOME/workspace/tools}"
-LOG_DIR="${LOREGIST_LOG_DIR:-$HOME/workspace/logvault/embed-log}"
+LOREGIST="${LOREGIST_WORKSPACE:-$HOME/workspace}/loregist/loregist"
+TOOLS="${LOREGIST_WORKSPACE:-$HOME/workspace}/tools"
+LOG_DIR="${LOREGIST_WORKSPACE:-$HOME/workspace}/logvault/embed-log"
 LOG="$LOG_DIR/rotate-$(date +%Y-%m-%d).log"
 
 mkdir -p "$LOG_DIR"
@@ -12,8 +12,7 @@ mkdir -p "$LOG_DIR"
 {
   echo "=== rotate 시작 $(date) ==="
 
-  # 등록 프로젝트를 동적으로 순회 (projects.toml 기준)
-  for proj in $("$LOREGIST" projects --json | python3 -c "import sys,json; [print(p['name']) for p in json.load(sys.stdin)]"); do
+  for proj in megazone-demo mz-sample loregist util; do
     echo "--- $proj ---"
     "$LOREGIST" rotate --project "$proj" || echo "[WARN] $proj rotate 실패"
   done

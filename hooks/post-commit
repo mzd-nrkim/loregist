@@ -8,8 +8,6 @@ if [ -z "$CHANGED" ]; then
   exit 0
 fi
 
-LOREGIST_DIR="${LOREGIST_DIR:-$HOME/workspace/loregist}"
+LOREGIST_DIR="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
 cd "$LOREGIST_DIR"
-LOG_DIR="${LOREGIST_LOG_DIR:-$HOME/workspace/logvault/embed-log}"
-mkdir -p "$LOG_DIR"
-PYTHONPATH="$LOREGIST_DIR/src" .venv/bin/python -m loregist.embed --incremental 2>&1 | tee -a "$LOG_DIR/$(date +%Y-%m-%d).log"
+PYTHONPATH="$LOREGIST_DIR/src" .venv/bin/python -m loregist.embed --incremental 2>&1 | tee -a "${LOREGIST_WORKSPACE:-$HOME/workspace}/logvault/embed-log/$(date +%Y-%m-%d).log"

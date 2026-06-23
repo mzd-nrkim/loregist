@@ -6,8 +6,10 @@ import sys
 import time
 from pathlib import Path
 
-from loregist.config import PROJECTS, MODELS_DIR, MODEL_NAME, WORKSPACE, get_db_connection, infer_project
+from loregist.config import PROJECTS, MODELS_DIR, MODEL_NAME, WORKSPACE, DEFAULT_EXTENSIONS, get_db_connection, infer_project
 from loregist.chunking import hash_file, hash_chunk, split_md, split_log
+from loregist import drift as _drift
+from loregist import auto_update
 
 _embedder = None
 
@@ -57,32 +59,62 @@ def embed_documents(texts: list[str]) -> list[list[float]]:
     return [v.tolist() for v in vecs]
 
 
-def discover_embed_files(project: str) -> list[tuple[str, str]]:
+def discover_embed_files(project: str, include_today: bool = False) -> list[tuple[str, str]]:
     cfg = PROJECTS[project]
     files: list[tuple[str, str]] = []
-    today = None  # _catalog 제외 로직용
+    today = datetime.date.today().strftime("%Y-%m-%d")
+    extensions = cfg.get("extensions", DEFAULT_EXTENSIONS[:])
 
-    # vault .log
+    def _kind(p: Path) -> str:
+        # 수집(extensions)과 처리(kind/청킹)는 별개 정책: .md→md/split_md, 그 외→log/split_log(의도된 설계)
+        return "md" if p.suffix == ".md" else "log"
+
+    # vault
     vault: Path | None = cfg["vault"]
     if vault and vault.exists():
-        for p in sorted(vault.rglob("*.log")):
-            files.append((str(p), "log"))
+        collected: list[Path] = []
+        for ext in extensions:
+            collected.extend(vault.rglob(f"*.{ext}"))
+        for p in sorted(set(collected)):
+            files.append((str(p), _kind(p)))
 
-    # done/cold .md (done=rotate 대기 완료문서, cold=cold storage 종착지)
+    # done/cold (done=rotate 대기 완료문서, cold=cold storage 종착지)
     for key in ("done", "cold"):
         path: Path | None = cfg.get(key)
         if path and path.exists():
-            for p in sorted(path.rglob("*.md")):
-                files.append((str(p), "md"))
+            collected = []
+            for ext in extensions:
+                collected.extend(path.rglob(f"*.{ext}"))
+            for p in sorted(set(collected)):
+                files.append((str(p), _kind(p)))
 
-    # docs/dev/*/*.md (날짜 폴더 안, _catalog 제외)
+    # docs_root (날짜 폴더 안·_wiki 하위 포함, 오늘 폴더 기본 제외)
     docs_root: Path | None = cfg["docs_root"]
     if docs_root and docs_root.exists():
-        for p in sorted(docs_root.rglob("*.md")):
+        collected = []
+        for ext in extensions:
+            collected.extend(docs_root.rglob(f"*.{ext}"))
+        for p in sorted(set(collected)):
             rel = p.relative_to(docs_root)
             parts = rel.parts
-            if len(parts) >= 2 and parts[0] not in ("_catalog",):
-                files.append((str(p), "md"))
+            if len(parts) >= 2:
+                if parts[0] == "_wiki":
+                    files.append((str(p), "catalog"))
+                elif include_today or parts[0] != today:
+                    files.append((str(p), _kind(p)))
+
+    # handbook (분산 파일 목록 — _parse_handbook_sources가 이미 개별 파일로 확장)
+    handbook_sources: list = cfg.get("handbook", [])
+    if handbook_sources:
+        existing_paths = {p for p, _ in files}  # 기존 수집 경로 set (vault/done/cold/docs_root 결과)
+        for entry in handbook_sources:
+            p: Path = entry["path"]
+            if not p.exists():  # B-1-2: 존재하지 않는 경로 스킵
+                continue
+            path_str = str(p)
+            if path_str not in existing_paths:  # B-1-3: 중복 제거 (기존 스캔 우선)
+                files.append((path_str, "handbook"))  # B-1-4
+                existing_paths.add(path_str)
 
     return files
 
@@ -155,6 +187,38 @@ def write_embed_log(
         f.write(line)
 
 
+def embed_file(conn, project: str, path: str) -> None:
+    """단일 파일을 임베딩하여 DB에 upsert한다.
+
+    watch.py 등 외부에서 직접 호출 가능한 공개 함수.
+    conn: psycopg2 connection (호출자가 관리)
+    project: 프로젝트 키
+    path: 임베딩할 파일 절대경로
+    """
+    p = Path(path)
+    # kind 결정: _catalog > handbook > 확장자 기준
+    cfg = PROJECTS[project]
+    docs_root: Path | None = cfg.get("docs_root")
+    handbook_paths = {str(entry["path"]) for entry in cfg.get("handbook", [])}
+    if docs_root and p.is_relative_to(docs_root) and p.relative_to(docs_root).parts[0] == "_wiki":
+        kind = "catalog"
+    elif str(p) in handbook_paths:
+        kind = "handbook"
+    else:
+        kind = "md" if p.suffix == ".md" else "log"
+
+    fhash = hash_file(path)
+    text = p.read_text(encoding="utf-8", errors="replace")
+    original_id = upsert_original(conn, project, path, kind, text, fhash)
+
+    chunks = split_md(text) if p.suffix == ".md" else split_log(text)
+    if chunks:
+        embeddings = embed_documents(chunks)
+        insert_chunks(conn, original_id, project, path, kind, chunks, embeddings)
+
+    conn.commit()
+
+
 def main():
     parser = argparse.ArgumentParser(description="문서/로그 임베딩 파이프라인")
     parser.add_argument("--project", help="프로젝트명 (기본: cwd 추론)")
@@ -164,15 +228,37 @@ def main():
         action="store_true",
         help="변경된 파일(file_hash 불일치)만 임베딩. 미변경 파일은 스킵.",
     )
+    parser.add_argument(
+        "--include-today",
+        action="store_true",
+        help="오늘 날짜 폴더(docs_root/YYYY-MM-DD/)를 임베딩 대상에 포함. 기본은 제외.",
+    )
+    parser.add_argument(
+        "--file",
+        dest="files",
+        action="append",
+        metavar="PATH",
+        help="단건 임베딩 대상 파일 경로(반복 가능). 지정 시 전체 스캔 대신 해당 파일만 임베딩.",
+    )
     args = parser.parse_args()
 
     project = infer_project(explicit=args.project)
     if project not in PROJECTS:
-        print(f"오류: 미등록 프로젝트 '{project}'. vector_config.py의 PROJECTS에 추가하세요.", file=sys.stderr)
+        print(f"오류: 미등록 프로젝트 '{project}'. projects.toml에 추가하세요.", file=sys.stderr)
         sys.exit(1)
     print(f"프로젝트: {project}")
 
-    files = discover_embed_files(project)
+    # --file 분기: 지정 파일만 임베딩하고 early-return (drift 계산 블록 도달 차단 — 재귀 1차 수단)
+    # getattr 안전 접근: 수동 Namespace로 main()을 호출하는 기존 테스트 호환(argparse 경유 시 default=None)
+    if getattr(args, "files", None):
+        # 단건 호출은 빈도가 낮으므로 hash 비교 없이 항상 upsert (단순·안전)
+        with get_db_connection() as conn:
+            for path in args.files:
+                embed_file(conn, project, path)
+                print(f"임베딩 완료: {path}")
+        return
+
+    files = discover_embed_files(project, include_today=args.include_today)
     print(f"대상 파일: {len(files)}개")
 
     if args.dry_run:
@@ -205,7 +291,7 @@ def main():
                 text = Path(path).read_text(encoding="utf-8", errors="replace")
                 original_id = upsert_original(conn, project, path, kind, text, fhash)
 
-                chunks = split_md(text) if kind == "md" else split_log(text)
+                chunks = split_md(text) if Path(path).suffix == ".md" else split_log(text)
                 if not chunks:
                     conn.commit()
                     processed += 1
@@ -244,6 +330,23 @@ def main():
         errors=errors,
         elapsed=elapsed,
     )
+
+    # drift 경고: 임베딩 완료 후 미반영 handbook이 있으면 안내 출력
+    # (Phase C가 이 지점에 추가 로직을 붙일 수 있도록 지역 변수로 남김)
+    try:
+        drift_paths = _drift.compute_drift(project)
+        if len(drift_paths) > 0:
+            print(f"미반영 handbook {len(drift_paths)}개 → 갱신 권장")
+        # Phase C+D1: 세션 밖 실행 시 헤드리스 Claude 자동 기동
+        handbook_on = PROJECTS[project].get("auto_handbook_update", False)
+        catalog_on = PROJECTS[project].get("auto_catalog_update", False)
+        entry = auto_update.should_auto_launch(os.environ, handbook_on, catalog_on, len(drift_paths))
+        if entry:
+            cwd = os.environ.get("LOREGIST_CWD", os.getcwd())
+            result = auto_update.launch_headless(entry, project, cwd)
+            auto_update.report_log(result)
+    except Exception:
+        pass
 
 
 if __name__ == "__main__":

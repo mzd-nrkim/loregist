@@ -30,7 +30,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-from loregist.config import PROJECTS, VAULT_RETENTION_DAYS
+from loregist.config import PROJECTS, VAULT_RETENTION_DAYS, DEFAULT_EXTENSIONS
 
 try:
     import psycopg2
@@ -84,18 +84,15 @@ def verify_in_db(conn, project: str, path: Path) -> bool:
 
 
 def _collect_vault_files(cfg: dict) -> list[Path]:
-    """vault + cold 디렉터리에서 .md / .log 파일 목록을 수집한다."""
+    """vault + cold 디렉터리에서 config extensions 기준 파일 목록을 수집한다."""
     files: list[Path] = []
+    extensions = cfg.get("extensions", DEFAULT_EXTENSIONS[:])
 
-    vault: "Path | None" = cfg.get("vault")
-    if vault and vault.exists():
-        files.extend(vault.rglob("*.md"))
-        files.extend(vault.rglob("*.log"))
-
-    cold: "Path | None" = cfg.get("cold")
-    if cold and cold.exists():
-        files.extend(cold.rglob("*.md"))
-        files.extend(cold.rglob("*.log"))
+    for dir_key in ("vault", "cold"):
+        directory: "Path | None" = cfg.get(dir_key)
+        if directory and directory.exists():
+            for ext in extensions:
+                files.extend(directory.rglob(f"*.{ext}"))
 
     # 중복 제거 (vault와 cold가 부모-자식 관계일 경우)
     return list({f.resolve(): f for f in files}.values())
@@ -132,7 +129,10 @@ def run(project: str, dry_run: bool = True) -> None:
         )
         sys.exit(0)
 
-    retention_days: int = vc.get("retention_days") or VAULT_RETENTION_DAYS
+    # retention_days=0 은 유효한 경계값(즉시 후보)이므로 None 여부로 분기.
+    # `or VAULT_RETENTION_DAYS` 패턴은 0을 falsy로 취급해 fallback이 발생하므로 사용 금지.
+    _rd = vc.get("retention_days")
+    retention_days: int = VAULT_RETENTION_DAYS if _rd is None else _rd
 
     # vault + cold 파일 수집
     files = _collect_vault_files(cfg)

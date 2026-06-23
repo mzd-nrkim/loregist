@@ -605,16 +605,34 @@ def test_hook_triggers_on_docs_dev(tmp_path):
     sentinel = tmp_path / "sentinel_triggered"
     hooks_dir = repo / ".git" / "hooks"
     hook_path = hooks_dir / "post-commit"
-    # 이 repo의 hooks/post-commit 템플릿을 기준으로 E2E 테스트용 hook 생성
-    project_root = Path(__file__).parent.parent
-    original_hook = project_root / "hooks" / "post-commit"
+    original_hook = Path(__file__).parent.parent / "hooks" / "post-commit"
     hook_script = original_hook.read_text(encoding="utf-8")
-    # 임베딩 실행 라인을 sentinel touch로 치환
-    hook_script = hook_script.replace(
-        'PYTHONPATH="$LOREGIST_DIR/src" .venv/bin/python -m loregist.embed --incremental 2>&1 | tee -a "$LOG_DIR/$(date +%Y-%m-%d).log"',
-        f'touch "{sentinel}"',
+    # loregist.embed --incremental 포함 라인을 식별해 sentinel touch로 치환 (부분 문자열 기반으로 견고화)
+    embed_marker = "loregist.embed --incremental"
+    embed_line = next(
+        (line for line in hook_script.splitlines() if embed_marker in line),
+        None,
     )
-    hook_path.write_text(hook_script, encoding="utf-8")
+    assert embed_line is not None, (
+        f"hooks/post-commit에 '{embed_marker}' 포함 라인이 존재해야 함 — hook 내용 확인 필요"
+    )
+    lines = hook_script.splitlines()
+    new_lines = []
+    for line in lines:
+        if embed_marker in line:
+            new_lines.append(f'touch "{sentinel}"')
+        elif line.strip().startswith('cd "$LOREGIST_DIR"'):
+            # 존재하지 않는 경로로의 cd를 제거해 set -e abort 방지
+            pass
+        else:
+            new_lines.append(line)
+    hook_script_replaced = "\n".join(new_lines)
+    # 치환이 실제 적용됐는지 검증 — 무음 no-op 차단
+    assert hook_script_replaced != hook_script, (
+        f"embed 실행 라인 치환이 적용되지 않음 (no-op). "
+        f"embed_line={embed_line!r} 이 hook_script에 포함돼 있어야 함."
+    )
+    hook_path.write_text(hook_script_replaced, encoding="utf-8")
     hook_path.chmod(0o755)
 
     # docs/dev 파일 변경 후 커밋
@@ -658,12 +676,10 @@ def test_hook_skips_on_other_path(tmp_path):
     sentinel = tmp_path / "sentinel_skipped"
     hooks_dir = repo / ".git" / "hooks"
     hook_path = hooks_dir / "post-commit"
-    # 이 repo의 hooks/post-commit 템플릿을 기준으로 E2E 테스트용 hook 생성
-    project_root = Path(__file__).parent.parent
-    original_hook = project_root / "hooks" / "post-commit"
+    original_hook = Path(__file__).parent.parent / "hooks" / "post-commit"
     hook_script = original_hook.read_text(encoding="utf-8")
     hook_script = hook_script.replace(
-        'PYTHONPATH="$LOREGIST_DIR/src" .venv/bin/python -m loregist.embed --incremental 2>&1 | tee -a "$LOG_DIR/$(date +%Y-%m-%d).log"',
+        'PYTHONPATH="$LOREGIST_DIR/src" .venv/bin/python -m loregist.embed --incremental 2>&1 | tee -a "${LOREGIST_WORKSPACE:-$HOME/workspace}/../logvault/embed-log/$(date +%Y-%m-%d).log"',
         f'touch "{sentinel}"',
     )
     hook_path.write_text(hook_script, encoding="utf-8")
@@ -684,4 +700,579 @@ def test_hook_skips_on_other_path(tmp_path):
     )
     assert not sentinel.exists(), (
         f"docs/dev 외 경로 변경 시 sentinel 파일이 생성되지 않아야 함 (hook skip 확인): {sentinel}"
+    )
+
+
+# ══════════════════════════════════════════════════════════════
+# Phase 3 — discover_embed_files 오늘 날짜 폴더 제외/포함 TC
+#
+# datetime.date는 C 확장 타입이라 monkeypatch.setattr로 직접 교체 불가.
+# embed.py가 `import datetime` 후 `datetime.date.today()`를 호출하므로,
+# embed 모듈의 datetime 속성을 FakeDatetime 클래스로 통째로 교체한다.
+# ══════════════════════════════════════════════════════════════
+
+import datetime as _datetime_mod
+
+
+def _make_fake_datetime(fixed_date_str: str):
+    """지정 날짜를 today()로 반환하는 fake datetime 모듈 대체 클래스를 반환."""
+    fixed = _datetime_mod.date.fromisoformat(fixed_date_str)
+
+    class _FakeDate(_datetime_mod.date):
+        @classmethod
+        def today(cls):
+            return fixed
+
+    class _FakeDatetime:
+        date = _FakeDate
+        datetime = _datetime_mod.datetime
+
+    return _FakeDatetime()
+
+
+def _setup_discover(tmp_path, monkeypatch, fixed_date_str: str, docs_structure: dict):
+    """공통 셋업: docs_root 파일 트리 구성 + datetime·PROJECTS 패치.
+
+    docs_structure: {상대경로: 파일내용} — 예) {"2026-06-19/file.md": "내용"}
+    반환값: (embed_mod, test_project, docs_root)
+    """
+    import loregist.embed as embed_mod
+    import loregist.config as config_mod
+
+    docs_root = tmp_path / "dev"
+    for rel_path, content in docs_structure.items():
+        p = docs_root / rel_path
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(content, encoding="utf-8")
+
+    monkeypatch.setattr(embed_mod, "datetime", _make_fake_datetime(fixed_date_str))
+
+    test_project = "__test_discover__"
+    patched_projects = {
+        test_project: {
+            "vault": None,
+            "done": None,
+            "cold": None,
+            "docs_root": docs_root,
+        }
+    }
+    monkeypatch.setattr(config_mod, "PROJECTS", patched_projects)
+    monkeypatch.setattr(embed_mod, "PROJECTS", patched_projects)
+
+    return embed_mod, test_project, docs_root
+
+
+# ──────────────────────────────────────────────────────────────
+# B-1: 오늘 날짜 폴더 기본 제외 (include_today=False)
+# ──────────────────────────────────────────────────────────────
+
+@pytest.mark.unit
+def test_discover_excludes_today(tmp_path, monkeypatch):
+    """B-1: 오늘 날짜 폴더(YYYY-MM-DD/) 안 파일이 기본(include_today=False)에서 제외됨."""
+    today_str = "2026-06-19"
+    embed_mod, test_project, _ = _setup_discover(
+        tmp_path, monkeypatch, today_str,
+        {f"{today_str}/file.md": "오늘 문서"},
+    )
+
+    result = embed_mod.discover_embed_files(test_project, include_today=False)
+    paths = [p for p, _ in result]
+
+    assert not any(today_str in p for p in paths), (
+        f"오늘 날짜 폴더({today_str}) 파일이 기본(include_today=False)에서 제외되어야 함, "
+        f"실제 포함된 경로: {[p for p in paths if today_str in p]}"
+    )
+
+
+# ──────────────────────────────────────────────────────────────
+# B-2: --include-today 시 오늘 날짜 폴더 포함
+# ──────────────────────────────────────────────────────────────
+
+@pytest.mark.unit
+def test_discover_includes_today_when_flag(tmp_path, monkeypatch):
+    """B-2: include_today=True 시 오늘 날짜 폴더 안 파일이 포함됨."""
+    today_str = "2026-06-19"
+    embed_mod, test_project, _ = _setup_discover(
+        tmp_path, monkeypatch, today_str,
+        {f"{today_str}/file.md": "오늘 문서"},
+    )
+
+    result = embed_mod.discover_embed_files(test_project, include_today=True)
+    paths = [p for p, _ in result]
+
+    assert any(today_str in p for p in paths), (
+        f"include_today=True 시 오늘 날짜 폴더({today_str}) 파일이 포함되어야 함, "
+        f"실제 경로 목록: {paths}"
+    )
+
+
+# ──────────────────────────────────────────────────────────────
+# B-3: _catalog 파일은 포함되고 kind=='catalog', TOPICS.md·DECISIONS.md 인덱스 파일도 포함
+# ──────────────────────────────────────────────────────────────
+
+@pytest.mark.unit
+def test_discover_includes_catalog_with_catalog_kind(tmp_path, monkeypatch):
+    """B-3: _catalog/T-001.md는 kind='catalog'로 포함, TOPICS.md·DECISIONS.md 인덱스 파일도
+    kind='catalog'로 포함, include_today=True 시 오늘 날짜 폴더 파일도 포함됨 (교차 검증)."""
+    today_str = "2026-06-19"
+    embed_mod, test_project, _ = _setup_discover(
+        tmp_path, monkeypatch, today_str,
+        {
+            "_wiki/TOPICS.md": "인덱스 파일 — 포함 대상",
+            "_wiki/DECISIONS.md": "결정 인덱스 파일",
+            "_wiki/T-001.md": "# T-001\n태스크 카탈로그 문서 내용입니다.",
+            f"{today_str}/file.md": "오늘 문서",
+        },
+    )
+
+    result = embed_mod.discover_embed_files(test_project, include_today=True)
+    paths_and_kinds = {p: k for p, k in result}
+    paths = list(paths_and_kinds.keys())
+
+    # T-001.md는 포함되고 kind == 'catalog'
+    catalog_paths = [p for p in paths if "_wiki" in p]
+    assert len(catalog_paths) >= 1, (
+        f"_wiki/T-001.md가 결과에 포함되어야 함, 실제 catalog 경로: {catalog_paths}"
+    )
+    t001_hit = [p for p in catalog_paths if "T-001.md" in p]
+    assert len(t001_hit) == 1, (
+        f"_wiki/T-001.md가 정확히 1개 포함되어야 함, 실제: {t001_hit}"
+    )
+    assert paths_and_kinds[t001_hit[0]] == "catalog", (
+        f"_wiki/T-001.md의 kind가 'catalog'여야 함, 실제: {paths_and_kinds[t001_hit[0]]!r}"
+    )
+
+    # TOPICS.md는 인덱스 파일이지만 포함되고 kind == 'catalog'
+    topics_hit = [p for p in paths if "TOPICS.md" in p]
+    assert len(topics_hit) == 1, (
+        f"_wiki/TOPICS.md가 정확히 1개 포함되어야 함, 실제: {topics_hit}"
+    )
+    assert paths_and_kinds[topics_hit[0]] == "catalog", (
+        f"_wiki/TOPICS.md의 kind가 'catalog'여야 함, 실제: {paths_and_kinds[topics_hit[0]]!r}"
+    )
+
+    # DECISIONS.md도 포함되고 kind == 'catalog'
+    decisions_hit = [p for p in paths if "DECISIONS.md" in p]
+    assert len(decisions_hit) == 1, (
+        f"_wiki/DECISIONS.md가 정확히 1개 포함되어야 함, 실제: {decisions_hit}"
+    )
+    assert paths_and_kinds[decisions_hit[0]] == "catalog", (
+        f"_wiki/DECISIONS.md의 kind가 'catalog'여야 함, 실제: {paths_and_kinds[decisions_hit[0]]!r}"
+    )
+
+    # 오늘 폴더 파일은 include_today=True라 포함되어야 함 (교차 검증)
+    assert any(today_str in p for p in paths), (
+        f"include_today=True 시 오늘 날짜 폴더({today_str}) 파일은 포함되어야 함"
+    )
+
+
+# ──────────────────────────────────────────────────────────────
+# 추가 경계 케이스: 어제 폴더는 include_today 값과 무관하게 항상 포함
+# ──────────────────────────────────────────────────────────────
+
+@pytest.mark.unit
+def test_discover_yesterday_always_included(tmp_path, monkeypatch):
+    """경계: 어제(2026-06-18/) 폴더 파일은 include_today 값과 무관하게 항상 포함."""
+    yesterday_str = "2026-06-18"
+    embed_mod, test_project, _ = _setup_discover(
+        tmp_path, monkeypatch, "2026-06-19",
+        {f"{yesterday_str}/file.md": "어제 문서"},
+    )
+
+    # include_today=False여도 어제 폴더는 포함
+    result_false = embed_mod.discover_embed_files(test_project, include_today=False)
+    paths_false = [p for p, _ in result_false]
+    assert any(yesterday_str in p for p in paths_false), (
+        f"어제 날짜 폴더({yesterday_str}) 파일은 include_today=False여도 포함되어야 함, "
+        f"실제 경로: {paths_false}"
+    )
+
+    # include_today=True여도 어제 폴더는 포함
+    result_true = embed_mod.discover_embed_files(test_project, include_today=True)
+    paths_true = [p for p, _ in result_true]
+    assert any(yesterday_str in p for p in paths_true), (
+        f"어제 날짜 폴더({yesterday_str}) 파일은 include_today=True여도 포함되어야 함, "
+        f"실제 경로: {paths_true}"
+    )
+
+
+# ──────────────────────────────────────────────────────────────
+# CORRECT: Conformance — today 포맷이 %Y-%m-%d (zero-padded) 확인
+# ──────────────────────────────────────────────────────────────
+
+@pytest.mark.unit
+def test_discover_today_format_zero_padded(tmp_path, monkeypatch):
+    """CORRECT/Conformance: 한 자리 월/일(2026-06-09)도 zero-pad로 폴더명과 정확히 일치."""
+    today_str = "2026-06-09"
+    embed_mod, test_project, _ = _setup_discover(
+        tmp_path, monkeypatch, today_str,
+        {f"{today_str}/file.md": "한 자리 날짜 문서"},
+    )
+
+    # 기본(include_today=False)에서 오늘 폴더 제외 확인
+    result = embed_mod.discover_embed_files(test_project, include_today=False)
+    paths = [p for p, _ in result]
+    assert not any(today_str in p for p in paths), (
+        f"한 자리 날짜(2026-06-09) 오늘 폴더도 기본 제외되어야 함, "
+        f"실제 포함: {[p for p in paths if today_str in p]}"
+    )
+
+    # include_today=True에서 포함 확인
+    result_inc = embed_mod.discover_embed_files(test_project, include_today=True)
+    paths_inc = [p for p, _ in result_inc]
+    assert any(today_str in p for p in paths_inc), (
+        f"include_today=True 시 한 자리 날짜(2026-06-09) 오늘 폴더가 포함되어야 함"
+    )
+
+
+# ──────────────────────────────────────────────────────────────
+# CORRECT: Existence — docs_root에 날짜 폴더가 없거나 오늘 폴더만 있을 때
+# ──────────────────────────────────────────────────────────────
+
+@pytest.mark.unit
+def test_discover_empty_docs_root(tmp_path, monkeypatch):
+    """CORRECT/Existence: docs_root가 비어 있으면 0건, 예외 없이 빈 리스트 반환."""
+    embed_mod, test_project, docs_root = _setup_discover(
+        tmp_path, monkeypatch, "2026-06-19", {},
+    )
+    # docs_root 자체는 존재해야 함 (없으면 exists() False로 스캔 생략)
+    docs_root.mkdir(parents=True, exist_ok=True)
+
+    result = embed_mod.discover_embed_files(test_project, include_today=False)
+    assert result == [], f"빈 docs_root에서 0건이어야 함, 실제: {result}"
+
+
+@pytest.mark.unit
+def test_discover_only_today_folder_returns_zero(tmp_path, monkeypatch):
+    """CORRECT/Existence+Cardinality: 오늘 폴더만 있으면 기본 0건, include_today=True는 N건."""
+    today_str = "2026-06-19"
+    embed_mod, test_project, _ = _setup_discover(
+        tmp_path, monkeypatch, today_str,
+        {
+            f"{today_str}/a.md": "파일 A",
+            f"{today_str}/b.md": "파일 B",
+        },
+    )
+
+    # 기본: 오늘 폴더만 있으면 0건
+    result_false = embed_mod.discover_embed_files(test_project, include_today=False)
+    assert result_false == [], (
+        f"오늘 폴더만 있을 때 기본(include_today=False)는 0건이어야 함, 실제: {result_false}"
+    )
+
+    # include_today=True: 2건 포함
+    result_true = embed_mod.discover_embed_files(test_project, include_today=True)
+    assert len(result_true) == 2, (
+        f"include_today=True 시 오늘 폴더 파일 2건이어야 함, 실제: {len(result_true)}"
+    )
+
+
+# ══════════════════════════════════════════════════════════════
+# Phase C — catalog 파일 embed 포함 TC
+# ══════════════════════════════════════════════════════════════
+
+# ──────────────────────────────────────────────────────────────
+# C-1: _catalog/T-001.md fixture 추가 후 embed 포함 확인 (단위)
+# ──────────────────────────────────────────────────────────────
+
+@pytest.mark.unit
+def test_discover_catalog_file_included_with_catalog_kind(tmp_path, monkeypatch):
+    """C-1: _catalog/T-001.md가 discover 결과에 kind='catalog'로 포함됨,
+    날짜폴더 파일은 kind='md'임을 교차 확인."""
+    embed_mod, test_project, _ = _setup_discover(
+        tmp_path, monkeypatch, "2026-06-22",
+        {
+            "_wiki/T-001.md": "# T-001\n## 목적\n카탈로그 태스크 문서 내용입니다.\n" + "내용" * 30,
+            "2026-06-15/normal.md": "날짜폴더 일반 문서",
+        },
+    )
+
+    result = embed_mod.discover_embed_files(test_project, include_today=False)
+    paths_and_kinds = {p: k for p, k in result}
+    paths = list(paths_and_kinds.keys())
+
+    # _wiki/T-001.md 포함 확인
+    t001_paths = [p for p in paths if "T-001.md" in p]
+    assert len(t001_paths) == 1, (
+        f"_wiki/T-001.md가 정확히 1개 포함되어야 함, 실제: {t001_paths}"
+    )
+    assert paths_and_kinds[t001_paths[0]] == "catalog", (
+        f"_wiki/T-001.md의 kind가 'catalog'여야 함, 실제: {paths_and_kinds[t001_paths[0]]!r}"
+    )
+
+    # 날짜폴더 파일은 kind == 'md'
+    date_paths = [p for p in paths if "2026-06-15" in p]
+    assert len(date_paths) == 1, (
+        f"날짜폴더 파일(2026-06-15/normal.md)이 1개 포함되어야 함, 실제: {date_paths}"
+    )
+    assert paths_and_kinds[date_paths[0]] == "md", (
+        f"날짜폴더 .md 파일의 kind가 'md'여야 함, 실제: {paths_and_kinds[date_paths[0]]!r}"
+    )
+
+
+# ──────────────────────────────────────────────────────────────
+# C-3: DB 통합 — upsert_original로 source_kind='catalog' 행 삽입 확인
+# ──────────────────────────────────────────────────────────────
+
+@pytest.mark.integration
+def test_catalog_upsert_original_source_kind(real_db):
+    """C-3a: catalog 문서를 upsert_original로 삽입 시 doc_originals에
+    source_kind='catalog' 행이 1개 이상 존재함."""
+    import hashlib
+    from loregist.config import get_db_connection
+    from loregist.embed import upsert_original
+
+    project = real_db
+    source_path = "/test/_wiki/T-001.md"
+    source_kind = "catalog"
+    text = "# T-001\n## 목적\n카탈로그 태스크 문서 내용입니다.\n" + "내용" * 30
+    file_hash = hashlib.sha256(text.encode()).hexdigest()
+
+    with get_db_connection() as conn:
+        returned_id = upsert_original(conn, project, source_path, source_kind, text, file_hash)
+        conn.commit()
+
+        assert returned_id > 0, (
+            f"upsert_original 반환 id가 양의 정수여야 함, 실제: {returned_id}"
+        )
+
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT COUNT(*) FROM doc_originals WHERE project = %s AND source_kind = 'catalog'",
+                (project,),
+            )
+            count = cur.fetchone()[0]
+        assert count >= 1, (
+            f"doc_originals에 source_kind='catalog' 행이 1개 이상이어야 함, 실제: {count}"
+        )
+
+
+@pytest.mark.integration
+@pytest.mark.slow
+def test_catalog_split_md_chunks_inserted(real_db):
+    """C-3b: catalog .md 텍스트를 split_md로 청킹 → insert_chunks → doc_chunks에 행 존재.
+    split_md 청킹 회귀 검증: catalog 문서도 .md 확장자 기준으로 split_md가 동작함을 확인."""
+    import hashlib
+    from loregist.config import get_db_connection
+    from loregist.embed import upsert_original, insert_chunks, embed_documents
+    from loregist.chunking import split_md
+
+    project = real_db
+    source_path = "/test/_wiki/T-002.md"
+    source_kind = "catalog"
+
+    body_a = "A" * 110
+    body_b = "B" * 110
+    text = f"## 섹션 A\n{body_a}\n\n## 섹션 B\n{body_b}"
+    file_hash = hashlib.sha256(text.encode()).hexdigest()
+
+    chunks = split_md(text)
+    assert len(chunks) >= 1, "catalog .md split_md가 청크를 반환해야 함"
+
+    embeddings = embed_documents(chunks)
+
+    with get_db_connection() as conn:
+        original_id = upsert_original(conn, project, source_path, source_kind, text, file_hash)
+        insert_chunks(conn, original_id, project, source_path, source_kind, chunks, embeddings)
+        conn.commit()
+
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT COUNT(*) FROM doc_chunks WHERE project = %s AND source_path = %s",
+                (project, source_path),
+            )
+            db_count = cur.fetchone()[0]
+        assert db_count == len(chunks), (
+            f"doc_chunks 행수({db_count})가 split_md 청크수({len(chunks)})와 일치해야 함"
+        )
+
+
+# ══════════════════════════════════════════════════════════════
+# Phase 2 E — handbook 임베딩 TC
+# ══════════════════════════════════════════════════════════════
+
+# ──────────────────────────────────────────────────────────────
+# E-1-1: discover_embed_files — handbook 파일이 kind='handbook'로 포함
+# ──────────────────────────────────────────────────────────────
+
+@pytest.mark.unit
+def test_discover_includes_handbook_sources(tmp_path, monkeypatch):
+    """E-1-1: handbook에 설정된 파일이 discover_embed_files 결과에 kind='handbook'로 포함됨."""
+    import loregist.embed as embed_mod
+    import loregist.config as config_mod
+
+    # handbook 파일은 docs_root 밖 별도 디렉터리에 생성
+    handbook_dir = tmp_path / "handbook"
+    handbook_dir.mkdir()
+    handbook_file = handbook_dir / "page.md"
+    handbook_file.write_text("# Handbook 페이지\n" + "W" * 100, encoding="utf-8")
+
+    # docs_root는 별도로 구성 (빈 디렉터리)
+    docs_root = tmp_path / "dev"
+    docs_root.mkdir()
+
+    test_project = "__test_handbook_e1_1__"
+    patched_projects = {
+        test_project: {
+            "vault": None,
+            "done": None,
+            "cold": None,
+            "docs_root": docs_root,
+            "handbook": [
+                {"path": handbook_file, "writable": False, "update_when": None}
+            ],
+        }
+    }
+    monkeypatch.setattr(config_mod, "PROJECTS", patched_projects)
+    monkeypatch.setattr(embed_mod, "PROJECTS", patched_projects)
+
+    result = embed_mod.discover_embed_files(test_project)
+    handbook_entries = [(p, k) for p, k in result if k == "handbook"]
+
+    assert len(handbook_entries) >= 1, (
+        f"handbook 파일이 kind='handbook'로 1건 이상 포함되어야 함, 실제: {result}"
+    )
+    handbook_paths = [p for p, _ in handbook_entries]
+    assert any(str(handbook_file) in p for p in handbook_paths), (
+        f"handbook_file({handbook_file})이 handbook 항목에 포함되어야 함, 실제 handbook 항목: {handbook_entries}"
+    )
+
+
+# ──────────────────────────────────────────────────────────────
+# E-1-2: discover_embed_files — 존재하지 않는 handbook 경로는 스킵
+# ──────────────────────────────────────────────────────────────
+
+@pytest.mark.unit
+def test_discover_skips_nonexistent_handbook_path(tmp_path, monkeypatch):
+    """E-1-2: handbook에 존재하지 않는 경로를 설정하면 discover 결과에 handbook 항목이 0건임."""
+    import loregist.embed as embed_mod
+    import loregist.config as config_mod
+
+    docs_root = tmp_path / "dev"
+    docs_root.mkdir()
+
+    nonexistent_path = tmp_path / "handbook" / "ghost.md"  # 파일 생성 안 함
+
+    test_project = "__test_handbook_e1_2__"
+    patched_projects = {
+        test_project: {
+            "vault": None,
+            "done": None,
+            "cold": None,
+            "docs_root": docs_root,
+            "handbook": [
+                {"path": nonexistent_path, "writable": False, "update_when": None}
+            ],
+        }
+    }
+    monkeypatch.setattr(config_mod, "PROJECTS", patched_projects)
+    monkeypatch.setattr(embed_mod, "PROJECTS", patched_projects)
+
+    result = embed_mod.discover_embed_files(test_project)
+    handbook_entries = [(p, k) for p, k in result if k == "handbook"]
+
+    assert len(handbook_entries) == 0, (
+        f"존재하지 않는 handbook 경로는 스킵되어 handbook 항목이 0건이어야 함, 실제: {handbook_entries}"
+    )
+
+
+# ──────────────────────────────────────────────────────────────
+# E-1-3: discover_embed_files — vault와 handbook 중복 파일은 vault 우선
+# ──────────────────────────────────────────────────────────────
+
+@pytest.mark.unit
+def test_discover_deduplicates_handbook_and_vault(tmp_path, monkeypatch):
+    """E-1-3: vault 안의 파일을 handbook에도 추가하면 해당 파일이 1건만 포함되고
+    kind는 vault 스캔 결과('md' 또는 'log')가 우선됨 (handbook이 아님)."""
+    import loregist.embed as embed_mod
+    import loregist.config as config_mod
+
+    # vault 디렉터리에 파일 생성
+    vault_dir = tmp_path / "vault"
+    vault_dir.mkdir()
+    shared_file = vault_dir / "shared.md"
+    shared_file.write_text("# 공유 파일\n" + "S" * 100, encoding="utf-8")
+
+    docs_root = tmp_path / "dev"
+    docs_root.mkdir()
+
+    test_project = "__test_handbook_e1_3__"
+    patched_projects = {
+        test_project: {
+            "vault": vault_dir,
+            "done": None,
+            "cold": None,
+            "docs_root": docs_root,
+            "handbook": [
+                {"path": shared_file, "writable": False, "update_when": None}
+            ],
+        }
+    }
+    monkeypatch.setattr(config_mod, "PROJECTS", patched_projects)
+    monkeypatch.setattr(embed_mod, "PROJECTS", patched_projects)
+
+    result = embed_mod.discover_embed_files(test_project)
+    shared_entries = [(p, k) for p, k in result if str(shared_file) in p]
+
+    # 1건만 포함되어야 함 (중복 제거)
+    assert len(shared_entries) == 1, (
+        f"vault+handbook 중복 파일은 1건만 포함되어야 함, 실제: {shared_entries}"
+    )
+
+    # kind는 vault 우선 ('md' 또는 'log'), handbook이 아님
+    _, kind = shared_entries[0]
+    assert kind in ("md", "log"), (
+        f"vault에서 먼저 수집된 파일의 kind는 'md' 또는 'log'여야 함 (handbook 아님), 실제: {kind!r}"
+    )
+    assert kind != "handbook", (
+        f"vault 파일이 handbook에도 있을 때 kind가 'handbook'가 되어서는 안 됨, 실제: {kind!r}"
+    )
+
+
+# ──────────────────────────────────────────────────────────────
+# E-2-1: embed_file — handbook 파일 임베딩 시 source_kind='handbook'로 DB 저장
+# ──────────────────────────────────────────────────────────────
+
+@pytest.mark.integration
+def test_embed_handbook_source_kind_stored(real_db, tmp_path, monkeypatch):
+    """E-2-1: handbook 파일을 embed_file()로 임베딩하면 doc_originals에 source_kind='handbook'로 저장됨."""
+    import loregist.embed as vector_embed
+    import loregist.config as vector_config
+    from loregist.config import get_db_connection
+
+    # handbook 파일 생성
+    handbook_dir = tmp_path / "handbook"
+    handbook_dir.mkdir()
+    handbook_file = handbook_dir / "handbook_test.md"
+    handbook_file.write_text("# Handbook 테스트\n" + "A" * 200, encoding="utf-8")
+
+    # PROJECTS에 real_db 슬롯에 handbook 포함해 패치
+    patched_projects = dict(vector_config.PROJECTS)
+    patched_projects[real_db] = {
+        "vault": None,
+        "done": None,
+        "cold": None,
+        "docs_root": None,
+        "handbook": [{"path": handbook_file, "writable": False, "update_when": None}],
+    }
+    monkeypatch.setattr(vector_config, "PROJECTS", patched_projects)
+    monkeypatch.setattr(vector_embed, "PROJECTS", patched_projects)
+
+    # embed_file 직접 호출
+    with get_db_connection() as conn:
+        vector_embed.embed_file(conn, real_db, str(handbook_file))
+
+        # DB에서 source_kind 확인
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT source_kind FROM doc_originals WHERE project = %s AND source_path = %s",
+                (real_db, str(handbook_file)),
+            )
+            row = cur.fetchone()
+
+    assert row is not None, (
+        f"embed_file 호출 후 doc_originals에 행이 존재해야 함 (project={real_db}, path={handbook_file})"
+    )
+    assert row[0] == "handbook", (
+        f"handbook 파일의 source_kind가 'handbook'여야 함, 실제: {row[0]!r}"
     )

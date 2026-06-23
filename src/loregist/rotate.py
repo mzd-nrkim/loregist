@@ -16,7 +16,9 @@ import sys
 from datetime import date, datetime
 from pathlib import Path
 
-from loregist.config import PROJECTS, ROTATE_TO_VAULT_DAYS, get_db_connection, infer_project
+from loregist.config import PROJECTS, get_db_connection, infer_project
+
+_IGNORE_FOR_EMPTY: frozenset[str] = frozenset({".DS_Store", ".gitkeep"})
 
 
 # ---------------------------------------------------------------------------
@@ -35,18 +37,24 @@ def parse_folder_date(name: str) -> date | None:
 # C-1. 이동 대상 파일 수집
 # ---------------------------------------------------------------------------
 
-def discover_rotate_targets(project: str) -> list[tuple[Path, int]]:
+def discover_rotate_targets(project: str, extensions: list[str] | None = None) -> list[tuple[Path, int]]:
     """
     PROJECTS[project]['docs_root'] 하위 날짜 폴더를 스캔해
-    ROTATE_TO_VAULT_DAYS 초과 경과된 폴더의 *.md 파일 목록을 반환한다.
+    ROTATE_TO_VAULT_DAYS 초과 경과된 폴더의 extensions 대상 확장자 파일 목록을 반환한다.
     반환: [(파일 Path, 경과일수), ...]
-    _catalog / 오늘 폴더는 제외.
+    _wiki / 오늘 폴더는 제외.
+
+    확장자 정책: extensions 파라미터 또는 PROJECTS[project]['extensions'] 기본값 사용.
+    기본값은 ["md", "log", "txt"].
     """
     cfg = PROJECTS[project]
     docs_root: Path | None = cfg.get("docs_root")
     if not docs_root or not docs_root.exists():
         print(f"[WARN] {project}: docs_root 가 없거나 존재하지 않음, 스캔 건너뜀", file=sys.stderr)
         return []
+
+    if extensions is None:
+        extensions = cfg.get("extensions", ["md", "log", "txt"])
 
     today = date.today()
     results: list[tuple[Path, int]] = []
@@ -55,7 +63,7 @@ def discover_rotate_targets(project: str) -> list[tuple[Path, int]]:
         if not entry.is_dir():
             continue
         name = entry.name
-        if name in ("_catalog",):  # cold 폴더는 discover_rotate_targets 스캔 밖 (docs_root 아님)
+        if name in ("_wiki",):  # cold 폴더는 discover_rotate_targets 스캔 밖 (docs_root 아님)
             continue
 
         folder_date = parse_folder_date(name)
@@ -67,31 +75,52 @@ def discover_rotate_targets(project: str) -> list[tuple[Path, int]]:
             continue  # 오늘 폴더 제외
 
         elapsed = (today - folder_date).days
-        if elapsed < ROTATE_TO_VAULT_DAYS:
+        if elapsed < cfg["hot_days"]:
             continue  # 아직 기간 미경과
 
-        for md_file in sorted(entry.rglob("*.md")):
+        seen: set[Path] = set()
+        files: list[Path] = []
+        for ext in extensions:
+            for f in sorted(entry.rglob(f"*.{ext}")):
+                if f not in seen:
+                    seen.add(f)
+                    files.append(f)
+        for md_file in sorted(files):
             results.append((md_file, elapsed))
 
     return results
 
 
-def discover_done_rotate_targets(project: str) -> list[tuple[Path, int]]:
+def discover_done_rotate_targets(project: str, extensions: list[str] | None = None) -> list[tuple[Path, int]]:
     """
-    done 경로에서 파일명 YYYY-MM-DD로 시작하는 *.md를 스캔해
+    done 경로에서 파일명 YYYY-MM-DD로 시작하는 extensions 대상 확장자 파일을 스캔해
     ROTATE_TO_VAULT_DAYS 초과 경과된 파일 목록을 반환한다.
     반환: [(파일 Path, 경과일수), ...]
     cold 경로는 rotate 비대상 — 이미 cold storage 종착지.
+
+    확장자 정책: extensions 파라미터 또는 PROJECTS[project]['extensions'] 기본값 사용.
+    기본값은 ["md", "log", "txt"].
     """
     cfg = PROJECTS[project]
     done: Path | None = cfg.get("done")
     if not done or not done.exists():
         return []
 
+    if extensions is None:
+        extensions = cfg.get("extensions", ["md", "log", "txt"])
+
     today = date.today()
     results: list[tuple[Path, int]] = []
 
-    for md_file in sorted(done.glob("*.md")):
+    seen: set[Path] = set()
+    files: list[Path] = []
+    for ext in extensions:
+        for f in sorted(done.glob(f"*.{ext}")):
+            if f not in seen:
+                seen.add(f)
+                files.append(f)
+
+    for md_file in sorted(files):
         file_date = parse_folder_date(md_file.name[:10])
         if file_date is None:
             continue  # 날짜 접두사 없는 파일 스킵
@@ -100,12 +129,24 @@ def discover_done_rotate_targets(project: str) -> list[tuple[Path, int]]:
             continue
 
         elapsed = (today - file_date).days
-        if elapsed < ROTATE_TO_VAULT_DAYS:
+        if elapsed < cfg["hot_days"]:
             continue
 
         results.append((md_file, elapsed))
 
     return results
+
+
+# ---------------------------------------------------------------------------
+# E-3. 빈 날짜폴더 정리 헬퍼
+# ---------------------------------------------------------------------------
+
+def _is_content_empty(folder: Path) -> bool:
+    """폴더 내 콘텐츠 파일이 없는지 확인 (메타파일 무시)."""
+    for p in folder.iterdir():
+        if p.name not in _IGNORE_FOR_EMPTY:
+            return False
+    return True
 
 
 # ---------------------------------------------------------------------------
@@ -250,12 +291,12 @@ def main():
     project = infer_project(explicit=args.project)
     if project not in PROJECTS:
         print(
-            f"오류: 미등록 프로젝트 '{project}'. vector_config.py 의 PROJECTS 에 추가하세요.",
+            f"오류: 미등록 프로젝트 '{project}'. projects.toml 에 [projects.{project}] 블록을 추가하세요 (config.py 참조).",
             file=sys.stderr,
         )
         sys.exit(1)
 
-    print(f"프로젝트: {project}  (rotate 기준: {ROTATE_TO_VAULT_DAYS}일 초과)")
+    print(f"프로젝트: {project}  (rotate 기준: {PROJECTS[project]['hot_days']}일 초과)")
 
     targets = discover_rotate_targets(project)
     done_targets = discover_done_rotate_targets(project)
@@ -275,6 +316,18 @@ def main():
                 embedded = is_embedded(conn, project, file_path)
                 embed_mark = "O" if embedded else "X"
                 print(f"  [done] [경과={elapsed}일] [임베딩={embed_mark}] {file_path.name}")
+
+        # dry-run: 제거 예정 빈 날짜폴더 출력
+        docs_root = PROJECTS[project].get("docs_root")
+        if docs_root:
+            processed_dirs: set[Path] = set()
+            for src, _ in targets:
+                d = src.parent
+                if docs_root in d.parents or d == docs_root:
+                    processed_dirs.add(d)
+            for folder in sorted(processed_dirs, key=lambda p: len(p.parts), reverse=True):
+                if folder.exists() and _is_content_empty(folder):
+                    print(f"[dry-run] 빈 폴더 제거 예정: {folder}")
         return
 
     # 실제 이동
@@ -308,6 +361,20 @@ def main():
                 rotated += 1
             else:
                 errors += 1
+
+    # 회전 후 빈 날짜폴더 제거 (docs_root 하위만)
+    docs_root = PROJECTS[project].get("docs_root")
+    if docs_root:
+        processed_dirs: set[Path] = set()
+        for src, _ in targets:
+            d = src.parent
+            if docs_root in d.parents or d == docs_root:
+                processed_dirs.add(d)
+        for folder in sorted(processed_dirs, key=lambda p: len(p.parts), reverse=True):
+            if folder.exists() and _is_content_empty(folder):
+                for meta in list(folder.iterdir()):
+                    meta.unlink()
+                folder.rmdir()
 
     print(
         f"완료: 이동={rotated}개, 스킵(미임베딩)={skipped}개, 오류={errors}개"

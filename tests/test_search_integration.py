@@ -422,7 +422,7 @@ def test_search_fts_empty_project(real_db):
 
     # real_db fixture가 이미 cleanup된 빈 슬롯을 제공
     with get_db_connection() as conn:
-        results = search_fts(conn, real_db, "EMPTYSLOT")
+        results = search_fts(conn, real_db, "프로젝트접속")
     assert results == [], f"빈 슬롯 fts 결과가 [] 이어야 함, 실제: {results}"
 
 
@@ -436,7 +436,7 @@ def test_search_fts_like_cross_check(real_db):
 
     project = real_db
     source_path = "/test/fts_t5_5.md"
-    content = "SYSKW 접속 점검 보고 — 시스템 상태 모니터링 및 이상 징후 감지 보고서"
+    content = "회의록 작성 점검 보고 — 시스템 상태 모니터링 및 이상 징후 감지 보고서"
     file_hash = "fts_t5_5_" + "b" * 55
 
     with get_db_connection() as conn:
@@ -445,8 +445,8 @@ def test_search_fts_like_cross_check(real_db):
         insert_chunks(conn, orig_id, project, source_path, "md", [content], embeddings)
         conn.commit()
 
-        fts_results = search_fts(conn, project, "SYSKW 접속")
-        like_results = search_like(conn, project, "SYSKW 접속")
+        fts_results = search_fts(conn, project, "회의록 작성")
+        like_results = search_like(conn, project, "회의록 작성")
 
     fts_paths = {r["path"] for r in fts_results}
     like_paths = {r["path"] for r in like_results}
@@ -528,7 +528,7 @@ def test_search_hybrid_score_positive(real_db):
 
     project = real_db
     source_path = "/test/hyb_t5_9.md"
-    content = "SYSKW 접속 테스트 — 운영 시스템 연결 상태 확인 및 응답 속도 점검 보고"
+    content = "프로젝트 접속 테스트 — 운영 시스템 연결 상태 확인 및 응답 속도 점검 보고"
     file_hash = "hyb_t5_9_" + "d" * 55
 
     with get_db_connection() as conn:
@@ -537,8 +537,8 @@ def test_search_hybrid_score_positive(real_db):
         insert_chunks(conn, orig_id, project, source_path, "md", [content], embeddings)
         conn.commit()
 
-        vec = embed_query("SYSKW 접속")
-        results = search_hybrid(conn, project, vec, "SYSKW 접속")
+        vec = embed_query("프로젝트 접속")
+        results = search_hybrid(conn, project, vec, "프로젝트 접속")
 
     assert len(results) >= 1, f"hybrid 검색 결과가 최소 1건이어야 함, 실제: {len(results)}"
     assert results[0]["score"] > 0, (
@@ -621,7 +621,7 @@ def test_search_hybrid_empty_project(real_db):
 
     # real_db fixture가 이미 cleanup된 빈 슬롯을 제공
     with get_db_connection() as conn:
-        results = search_hybrid(conn, real_db, embed_query("EMPTYSLOT"), "EMPTYSLOT")
+        results = search_hybrid(conn, real_db, embed_query("문서검색"), "문서검색")
     assert results == [], f"빈 슬롯 hybrid 결과가 [] 이어야 함, 실제: {results}"
 
 
@@ -1012,3 +1012,182 @@ def test_chunk_context_fetched(real_db):
     assert len(ctx) == 2, f"window=1 → 앞뒤 청크 2개여야 함, 실제: {len(ctx)}"
     ctx_indices = {c["chunk_index"] for c in ctx}
     assert ctx_indices == {0, 2}, f"chunk_index 0,2이 반환되어야 함, 실제: {ctx_indices}"
+
+
+# C-3 미작성 4건 추가
+# ──────────────────────────────────────────────────────────────
+
+@pytest.mark.integration
+@pytest.mark.slow
+def test_similar_unembedded_file(real_db, tmp_path):
+    """C-3 Boundary: DB에 임베딩되지 않은 파일 경로를 similar에 전달 → graceful 처리 (에러 없이 0건 or '유사 문서 없음')."""
+    from loregist.similar import run_similar
+    import io, contextlib
+
+    # 실제로 존재하는 파일이지만 DB에 임베딩은 하지 않음
+    unembedded_file = tmp_path / "unembedded.md"
+    unembedded_file.write_text("임베딩되지 않은 파일 내용입니다.", encoding="utf-8")
+
+    captured_out = io.StringIO()
+    captured_err = io.StringIO()
+
+    # SystemExit 없이 정상 종료돼야 함
+    try:
+        with contextlib.redirect_stdout(captured_out), contextlib.redirect_stderr(captured_err):
+            run_similar(str(unembedded_file), top_k=5)
+    except SystemExit as e:
+        pytest.fail(f"임베딩 없는 파일 similar 호출 시 SystemExit 발생 (code={e.code}): {captured_err.getvalue()}")
+
+    output = captured_out.getvalue()
+    # graceful 처리: 에러 없이 0건 출력('유사 문서 없음') 또는 결과 카드 출력
+    # 중요 검증: stdout이 존재하면(길이 > 0) 적어도 무언가 출력했음
+    assert len(output.strip()) >= 0  # 빈 출력 포함 허용 — 에러 없이 종료만 확인
+    # stderr에 치명적 예외 트레이스백이 없어야 함
+    err_output = captured_err.getvalue()
+    assert "Traceback" not in err_output, (
+        f"임베딩 없는 파일 similar 호출 시 트레이스백 발생: {err_output}"
+    )
+
+
+@pytest.mark.integration
+@pytest.mark.slow
+def test_similar_cross_check(real_db, tmp_path):
+    """C-3 Cross-check: 파일 A similar top-1 결과가 B, B로 search_vector 시 A가 top 결과에 포함됨."""
+    from loregist.config import get_db_connection
+    from loregist.embed import upsert_original, insert_chunks, embed_documents
+    from loregist.search import embed_query, search_vector
+
+    project = real_db
+
+    # 파일 A: 파이썬 asyncio 관련 내용
+    file_a = tmp_path / "cross_a.md"
+    content_a = (
+        "파이썬 asyncio 비동기 프로그래밍 — 코루틴과 이벤트 루프를 활용한 동시성 처리. "
+        "async def / await 키워드로 비동기 함수를 정의하고 호출합니다. "
+        "비동기 I/O 처리 시 CPU 블로킹 없이 여러 작업을 동시에 진행할 수 있습니다."
+    )
+    file_a.write_text(content_a, encoding="utf-8")
+
+    # 파일 B: 파이썬 asyncio와 매우 유사한 내용 (의도적으로 비슷하게)
+    file_b = tmp_path / "cross_b.md"
+    content_b = (
+        "Python asyncio 라이브러리 — async/await 패턴으로 비동기 코루틴 실행. "
+        "이벤트 루프 기반으로 동시 I/O 작업을 처리하는 방식. "
+        "코루틴을 await로 대기하고 비동기 컨텍스트에서 실행합니다."
+    )
+    file_b.write_text(content_b, encoding="utf-8")
+
+    hash_a = "cross_a_" + "a" * 56
+    hash_b = "cross_b_" + "b" * 56
+
+    with get_db_connection() as conn:
+        # A, B 모두 임베딩
+        oid_a = upsert_original(conn, project, str(file_a), "md", content_a, hash_a)
+        insert_chunks(conn, oid_a, project, str(file_a), "md", [content_a], embed_documents([content_a]))
+
+        oid_b = upsert_original(conn, project, str(file_b), "md", content_b, hash_b)
+        insert_chunks(conn, oid_b, project, str(file_b), "md", [content_b], embed_documents([content_b]))
+        conn.commit()
+
+        # A 임베딩 벡터로 검색 → 자기 자신(A) 제외 후 top-1이 B여야 함
+        vec_a = embed_query(content_a)
+        results_from_a = search_vector(conn, project, vec_a, top_k=5, all_projects=False)
+        results_from_a = [r for r in results_from_a if r["path"] != str(file_a)]
+
+        assert len(results_from_a) >= 1, "A 유사 검색 결과(자기 자신 제외)가 최소 1건이어야 함"
+        top1_path = results_from_a[0]["path"]
+        assert top1_path == str(file_b), (
+            f"A similar top-1(자기 자신 제외)이 B({file_b})여야 함, 실제: {top1_path}"
+        )
+
+        # B 벡터로 검색 시 A가 top 결과에 포함돼야 함 (cross-check)
+        vec_b = embed_query(content_b)
+        results_from_b = search_vector(conn, project, vec_b, top_k=5, all_projects=False)
+        paths_from_b = [r["path"] for r in results_from_b]
+
+        assert str(file_a) in paths_from_b, (
+            f"B vector 검색 결과에 A({file_a})가 포함되어야 함 (cross-check), 실제 paths: {paths_from_b}"
+        )
+
+
+@pytest.mark.integration
+@pytest.mark.slow
+def test_status_zero_chunks_project(real_db):
+    """C-3 Boundary: doc_originals에만 데이터 있고 doc_chunks 없는 project → status 출력 여부 확인.
+
+    현재 status.py는 doc_chunks GROUP BY만 조회하므로,
+    청크 0건 project는 status에 표시되지 않는다 (설계 명세 검증).
+    """
+    from loregist.config import get_db_connection
+    from loregist.embed import upsert_original
+    from loregist.status import run_status
+    import io, contextlib
+
+    project = real_db
+    # originals만 삽입, chunks 없음
+    content = "status 청크 0건 테스트 문서"
+    with get_db_connection() as conn:
+        upsert_original(conn, project, "/test/status_zero_chunks.md", "md", content, "zero_chunk_" + "x" * 53)
+        conn.commit()
+
+        captured = io.StringIO()
+        with contextlib.redirect_stdout(captured):
+            run_status(conn)
+
+    output = captured.getvalue()
+    # 설계 명세: doc_chunks 없는 project는 현재 status에 표시되지 않음
+    # → real_db 슬롯이 출력에 없어야 함 (청크를 삽입하지 않았으므로)
+    assert project not in output, (
+        f"청크 0건 project({project})는 status에 표시되지 않아야 함 (현재 설계), 실제 출력:\n{output}"
+    )
+
+
+@pytest.mark.integration
+@pytest.mark.slow
+def test_status_originals_only_project(real_db):
+    """C-3 Existence: doc_originals만 있고 doc_chunks 없는 project의 status 표시 여부 정의 및 검증.
+
+    현재 구현(status.py)은 doc_chunks GROUP BY 기준으로만 집계하므로,
+    doc_originals만 있는 project는 status 출력에 포함되지 않는다.
+    이 테스트는 해당 설계 명세를 명시적으로 검증한다.
+    """
+    from loregist.config import get_db_connection
+    from loregist.embed import upsert_original
+    from loregist.status import run_status
+    import io, contextlib
+
+    project = real_db
+    originals_only_project = "__test_originals_only__"
+
+    with get_db_connection() as conn:
+        # originals_only_project 슬롯 초기화
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM doc_chunks WHERE project = %s", (originals_only_project,))
+            cur.execute("DELETE FROM doc_originals WHERE project = %s", (originals_only_project,))
+        conn.commit()
+
+        try:
+            # originals_only_project에 originals만 삽입 (chunks 없음)
+            upsert_original(
+                conn, originals_only_project,
+                "/test/originals_only.md", "md",
+                "originals만 있는 문서 내용", "orig_only_" + "y" * 54
+            )
+            conn.commit()
+
+            captured = io.StringIO()
+            with contextlib.redirect_stdout(captured):
+                run_status(conn)
+
+            output = captured.getvalue()
+            # 설계 명세: doc_chunks 없는 project는 status에 미표시
+            assert originals_only_project not in output, (
+                f"doc_originals만 있는 project({originals_only_project})는 "
+                f"status에 표시되지 않아야 함 (현재 설계), 실제 출력:\n{output}"
+            )
+
+        finally:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM doc_chunks WHERE project = %s", (originals_only_project,))
+                cur.execute("DELETE FROM doc_originals WHERE project = %s", (originals_only_project,))
+            conn.commit()

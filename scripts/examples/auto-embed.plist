@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  키트 역할: 1시간 주기 자동 embed LaunchAgent
+    launchd가 이 파일을 읽어 매 3600초(1시간)마다 loregist embed를 실행한다.
+    임베딩이 자동으로 최신 상태를 유지되므로 터미널을 열 필요가 없다.
+
+  배치 위치: ~/Library/LaunchAgents/io.loregist.auto-embed.plist
+
+  설치 방법:
+    install-nondev-kit.sh 실행 시 자동 복사·등록된다.
+    수동 설치 시 아래 명령을 실행한다:
+      cp auto-embed.plist ~/Library/LaunchAgents/
+      launchctl load ~/Library/LaunchAgents/io.loregist.auto-embed.plist
+
+  제거 방법:
+      launchctl unload ~/Library/LaunchAgents/io.loregist.auto-embed.plist
+      rm ~/Library/LaunchAgents/io.loregist.auto-embed.plist
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>io.loregist.auto-embed</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/local/bin/loregist</string>
+    <string>embed</string>
+    <string>--incremental</string>
+  </array>
+  <!-- EnvironmentVariables: LaunchAgent 기본 PATH를 보강해 claude를 찾을 수 있게 한다.
+       주 방어는 auto_update._resolve_claude_bin()의 버전 무관 nvm glob이며,
+       이 PATH 주입은 이중 안전장치다.
+       주의: nvm 버전 경로(/v20.9.0)는 하드코딩 — nvm 버전 변경 시 이 줄도 갱신 필요. -->
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/Users/mz01-risingnrkim/.nvm/versions/node/v20.9.0/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+  </dict>
+  <key>StartInterval</key><integer>3600</integer>
+  <key>StandardOutPath</key><string>/tmp/loregist-embed.log</string>
+  <key>StandardErrorPath</key><string>/tmp/loregist-embed.log</string>
+</dict>
+</plist>

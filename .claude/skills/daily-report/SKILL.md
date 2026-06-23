@@ -8,10 +8,10 @@ allowed-tools: Bash, Read, Write, Edit, Glob, Grep, Task, ToolSearch, mcp__atlas
 ## 프로젝트 해석
 
 1. `--project <key>` 인자가 있으면 그 프로젝트 사용
-2. 없으면 `loregist projects --current` (cwd 기준 자동 추론)
+2. 없으면 `loregist project current` (cwd 기준 자동 추론)
 3. 추론 실패 시 사용자에게 프로젝트 키 질문
 
-`docs_root`: 추론된 프로젝트의 docs_root 값 (`loregist projects --json`으로 확인)
+`docs_root`: 추론된 프로젝트의 docs_root 값 (`loregist project list`로 확인)
 
 → loregist/CLAUDE.md "스킬 공통 — 프로젝트 추론 규칙" 적용
 작업문서 경로: `{docs_root}/{날짜}/{날짜}.01.작업문서.md`
@@ -118,7 +118,7 @@ symlink: `ln -sfn {오늘날짜}/daily-report.md {docs_root}/daily-report-latest
 
 # 리포 경로
 
-개인 리포 경로는 현재 프로젝트의 `docs_root` 상위 디렉터리 (`loregist projects --json`으로 확인).
+개인 리포 경로는 현재 프로젝트의 `docs_root` 상위 디렉터리 (`loregist project list`로 확인).
 `--team` 옵션 사용 시 팀 리포 경로는 사용자에게 확인 또는 대화 맥락에서 추론한다.
 
 # 제약 조건
@@ -127,3 +127,14 @@ symlink: `ln -sfn {오늘날짜}/daily-report.md {docs_root}/daily-report-latest
 2. 작업문서 없으면 Jira + git log 기반 생성 (경고 포함)
 3. Jira 조회 실패 시 작업문서 + git log만으로 생성
 4. 과장 표현 금지. **근거 없는 진행률 금지** — 추정 근거 없으면 `[??%]`
+
+## evening 모드 — catalog-update 선택적 실행
+
+`evening` 모드 완료 후, 현재 프로젝트에 `handbook` 선언이 있으면 사용자에게 아래 안내를 출력한다:
+
+```
+catalog-update로 오늘 작업 내용에서 topic/decision을 자동 추출할까요? (`/catalog-update --project {프로젝트}`)
+```
+
+- 실제 자동 실행은 하지 않고 사용자 선택에 맡긴다
+- `handbook` 미선언 프로젝트에서는 이 안내를 생략한다

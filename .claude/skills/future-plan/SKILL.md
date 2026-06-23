@@ -7,10 +7,10 @@ allowed-tools: Bash, Read, Write, Edit, Glob, Grep
 
 # 경로 해석
 
-`PERSONAL_WORK_ROOT` = `loregist projects --json` 에서 `personal-work.docs_root` 값
+`PERSONAL_WORK_ROOT` = `loregist project list` 에서 `personal-work.docs_root` 값
 
 ```bash
-PERSONAL_WORK_ROOT=$(loregist projects --json | python3 -c "import sys,json; d=json.load(sys.stdin); print(next(p['docs_root'] for p in d if p['name']=='personal-work'))")
+PERSONAL_WORK_ROOT=$(loregist project list | python3 -c "import sys,json; d=json.load(sys.stdin); print(next(p['docs_root'] for p in d if p['name']=='personal-work'))")
 ```
 
 ## 프로젝트 해석
@@ -35,7 +35,7 @@ PERSONAL_WORK_ROOT=$(loregist projects --json | python3 -c "import sys,json; d=j
 
 2. **주제명/키워드** — 두 번째 인자 이후
 
-3. **`--project <key>`**: 승격 시 대상 프로젝트의 docs_root 지정. 없으면 `loregist projects --current`로 추론.
+3. **`--project <key>`**: 승격 시 대상 프로젝트의 docs_root 지정. 없으면 `loregist project current`로 추론.
 
 # 경로
 

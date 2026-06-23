@@ -60,14 +60,14 @@ def test_load_projects_missing_keys_are_none(tmp_path):
     """
     toml_path = _write_toml(tmp_path, """
 [projects.loregist]
-done = "loregist_private/plans/done"
+done = "loregist/plans/done"
 """)
     result = load_projects(toml_path)
     proj = result["loregist"]
     assert proj["vault"] is None
     assert proj["docs_root"] is None
     assert proj["cold"] is None
-    assert proj["done"] == WORKSPACE / "loregist_private/plans/done"
+    assert proj["done"] == WORKSPACE / "loregist/plans/done"
 
 
 # ──────────────────────────────────────────────────────────────
@@ -143,3 +143,81 @@ key = "value"
 """)
     result = load_projects(toml_path)
     assert result == {}
+
+
+# ──────────────────────────────────────────────────────────────
+# G-1: extensions 파싱 단위테스트 4종
+# ──────────────────────────────────────────────────────────────
+
+@pytest.mark.unit
+def test_load_projects_extensions_default_when_omitted(tmp_path):
+    """
+    extensions 키 생략 시 기본값 ["md","log","txt"]가 반환된다.
+    """
+    toml_path = _write_toml(tmp_path, """
+[projects.no-ext-proj]
+docs_root = "/tmp/docs"
+""")
+    result = load_projects(toml_path)
+    assert result["no-ext-proj"]["extensions"] == ["md", "log", "txt"]
+
+
+@pytest.mark.unit
+def test_load_projects_extensions_explicit_value(tmp_path):
+    """
+    extensions 키를 지정하면 해당 list가 그대로 반환된다.
+    """
+    toml_path = _write_toml(tmp_path, """
+[projects.custom-ext-proj]
+docs_root = "/tmp/docs"
+extensions = ["md", "rst", "adoc"]
+""")
+    result = load_projects(toml_path)
+    assert result["custom-ext-proj"]["extensions"] == ["md", "rst", "adoc"]
+
+
+@pytest.mark.unit
+def test_load_projects_extensions_dot_and_uppercase_normalized(tmp_path):
+    """
+    dot 접두사와 대문자는 정규화된다: [".MD","Log"] → ["md","log"].
+    config.py:224 의 str(e).lower().lstrip(".") 반영.
+    """
+    toml_path = _write_toml(tmp_path, """
+[projects.norm-ext-proj]
+docs_root = "/tmp/docs"
+extensions = [".MD", "Log"]
+""")
+    result = load_projects(toml_path)
+    assert result["norm-ext-proj"]["extensions"] == ["md", "log"]
+
+
+@pytest.mark.unit
+def test_load_projects_extensions_invalid_type_falls_back_to_default(tmp_path):
+    """
+    extensions가 문자열(str)이거나 int이면 경고 후 기본값 ["md","log","txt"]로 폴백한다.
+    """
+    # 문자열 케이스
+    str_dir = tmp_path / "str_case"
+    str_dir.mkdir()
+    toml_path_str = str_dir / "projects.toml"
+    toml_path_str.write_text("""
+[projects.str-ext-proj]
+docs_root = "/tmp/docs"
+extensions = "md"
+""", encoding="utf-8")
+
+    result_str = load_projects(toml_path_str)
+    assert result_str["str-ext-proj"]["extensions"] == ["md", "log", "txt"]
+
+    # 정수 케이스
+    int_dir = tmp_path / "int_case"
+    int_dir.mkdir()
+    toml_path_int = int_dir / "projects.toml"
+    toml_path_int.write_text("""
+[projects.int-ext-proj]
+docs_root = "/tmp/docs"
+extensions = 123
+""", encoding="utf-8")
+
+    result_int = load_projects(toml_path_int)
+    assert result_int["int-ext-proj"]["extensions"] == ["md", "log", "txt"]

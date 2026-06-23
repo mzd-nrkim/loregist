@@ -6,16 +6,16 @@
 ## 심볼릭 링크 (권장)
 
 ```bash
-ln -sf "${LOREGIST_DIR:-$HOME/workspace/loregist}/hooks/post-commit" \
+ln -sf "${LOREGIST_WORKSPACE:-$HOME/workspace}/loregist/hooks/post-commit" \
     /path/to/project-repo/.git/hooks/post-commit
 ```
 
 ## 복사
 
 ```bash
-cp "${LOREGIST_DIR:-$HOME/workspace/loregist}/hooks/post-commit" \
+cp "${LOREGIST_WORKSPACE:-$HOME/workspace}/loregist/hooks/post-commit" \
     /path/to/project-repo/.git/hooks/post-commit
 chmod +x /path/to/project-repo/.git/hooks/post-commit
 ```
 
-실행 로그는 `${LOREGIST_LOG_DIR:-~/workspace/logvault/embed-log}/YYYY-MM-DD.log`에 기록됩니다.
+실행 로그는 `${LOREGIST_WORKSPACE:-$HOME/workspace}/../logvault/embed-log/YYYY-MM-DD.log`에 기록됩니다.
