@@ -293,6 +293,44 @@ def rotate_done_file(src: Path, project: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# P-4-1. 다음달 파티션 자동 생성
+# ---------------------------------------------------------------------------
+
+def ensure_next_month_partition(conn) -> None:
+    """다음달 파티션이 없으면 자동 생성한다."""
+    from datetime import date
+    today = date.today()
+    # 다음달 계산
+    if today.month == 12:
+        next_year, next_month = today.year + 1, 1
+    else:
+        next_year, next_month = today.year, today.month + 1
+
+    partition_name = f"doc_chunks_{next_year:04d}_{next_month:02d}"
+    start = f"{next_year:04d}-{next_month:02d}-01"
+    # 다음다음달 1일 (파티션 상한)
+    if next_month == 12:
+        end_year, end_month = next_year + 1, 1
+    else:
+        end_year, end_month = next_year, next_month + 1
+    end = f"{end_year:04d}-{end_month:02d}-01"
+
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name=%s",
+        (partition_name,)
+    )
+    if cur.fetchone() is None:
+        cur.execute(
+            f"CREATE TABLE {partition_name} PARTITION OF doc_chunks "
+            f"FOR VALUES FROM (%s) TO (%s)",
+            (start, end)
+        )
+        conn.commit()
+        print(f"[partition] 파티션 생성: {partition_name} ({start} ~ {end})")
+
+
+# ---------------------------------------------------------------------------
 # C-3. dry-run 출력 + main
 # ---------------------------------------------------------------------------
 
@@ -361,6 +399,7 @@ def main():
     errors = 0
 
     with get_db_connection() as conn:
+        ensure_next_month_partition(conn)
         for file_path, elapsed in targets:
             if not is_embedded(conn, project, file_path):
                 print(

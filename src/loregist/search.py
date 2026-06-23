@@ -3,7 +3,8 @@ import argparse
 import json
 import re
 import sys
-from datetime import date, datetime
+import calendar
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from loregist.config import PROJECTS, get_db_connection, infer_project
@@ -198,6 +199,186 @@ def search_hybrid(conn, project: str, vector: list[float], query: str, top_k: in
     return _rows_to_dicts(rows)
 
 
+def get_active_partitions(conn, since: datetime) -> list[str]:
+    """created_at 범위가 since 이후인 월별 파티션 이름 목록을 반환한다."""
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT table_name FROM information_schema.tables
+        WHERE table_schema = 'public'
+          AND table_name ~ '^doc_chunks_[0-9]{4}_[0-9]{2}$'
+        ORDER BY table_name
+        """
+    )
+    rows = cur.fetchall()
+    result = []
+    for (name,) in rows:
+        # doc_chunks_YYYY_MM 형태에서 연월 파싱
+        parts = name.split('_')  # ['doc', 'chunks', 'YYYY', 'MM']
+        try:
+            year, month = int(parts[2]), int(parts[3])
+            partition_start = datetime(year, month, 1, tzinfo=since.tzinfo)
+            # 파티션 범위 [start, end]가 [since, ∞)와 겹치면 포함
+            last_day = calendar.monthrange(year, month)[1]
+            partition_end = datetime(year, month, last_day, 23, 59, 59, tzinfo=since.tzinfo)
+            if partition_end >= since:
+                result.append(name)
+        except (IndexError, ValueError):
+            continue
+    return result
+
+
+def search_multistep(
+    conn,
+    project: str,
+    vector: list[float],
+    query: str,
+    tiers: list[str] | None = None,
+    threshold: float = 0.80,
+    top_k: int = 5,
+    mode: str = "hybrid",
+    all_projects: bool = False,
+    rrf_k: int = 60,
+) -> list[dict]:
+    """tier 단계별로 검색 범위를 확장해 threshold를 충족하는 결과를 반환한다.
+
+    tiers: ["m1","m3","m6","m12"] 또는 ["auto"] (auto는 m1→m3→m6→m12 순 확장)
+    threshold: top-1 score가 이 값 이상이면 즉시 반환
+    """
+    TIER_DAYS = {"m1": 30, "m3": 90, "m6": 180, "m12": 365}
+    ALL_TIERS = ["m1", "m3", "m6", "m12"]
+
+    if tiers is None or tiers == ["auto"] or "auto" in tiers:
+        tier_sequence = ALL_TIERS
+    else:
+        tier_sequence = [t for t in ALL_TIERS if t in tiers]
+
+    def _search_vector_since(since: datetime) -> list[dict]:
+        cur = conn.cursor()
+        if all_projects:
+            cur.execute(
+                """
+                SELECT project, source_path, source_kind,
+                       1 - (embedding <=> %s::vector) AS score,
+                       chunk_text
+                FROM doc_chunks
+                WHERE created_at >= %s
+                ORDER BY embedding <=> %s::vector
+                LIMIT %s
+                """,
+                (vector, since, vector, top_k),
+            )
+        else:
+            cur.execute(
+                """
+                SELECT project, source_path, source_kind,
+                       1 - (embedding <=> %s::vector) AS score,
+                       chunk_text
+                FROM doc_chunks
+                WHERE project = %s
+                  AND created_at >= %s
+                ORDER BY embedding <=> %s::vector
+                LIMIT %s
+                """,
+                (vector, project, since, vector, top_k),
+            )
+        return _rows_to_dicts(cur.fetchall())
+
+    def _search_hybrid_since(since: datetime) -> list[dict]:
+        cur = conn.cursor()
+        cur.execute("SET LOCAL pg_bigm.similarity_limit = 0.0")
+        if all_projects:
+            cur.execute(
+                """
+                WITH vec AS (
+                    SELECT c.id, c.project, c.source_path, c.source_kind, c.chunk_text,
+                           ROW_NUMBER() OVER (ORDER BY c.embedding <=> %(qvec)s::vector) AS rnk
+                    FROM doc_chunks c
+                    WHERE c.created_at >= %(since)s
+                    ORDER BY c.embedding <=> %(qvec)s::vector
+                    LIMIT 50
+                ),
+                fts AS (
+                    SELECT c.id, c.project, c.source_path, c.source_kind, c.chunk_text,
+                           ROW_NUMBER() OVER (ORDER BY bigm_similarity(c.chunk_text, %(q)s) DESC) AS rnk
+                    FROM doc_chunks c
+                    WHERE c.created_at >= %(since)s
+                      AND c.chunk_text =%% %(q)s
+                    ORDER BY bigm_similarity(c.chunk_text, %(q)s) DESC
+                    LIMIT 50
+                )
+                SELECT
+                    COALESCE(v.project, f.project),
+                    COALESCE(v.source_path, f.source_path),
+                    COALESCE(v.source_kind, f.source_kind),
+                    COALESCE(1.0/(%(rrf_k)s + v.rnk), 0) + COALESCE(1.0/(%(rrf_k)s + f.rnk), 0),
+                    COALESCE(v.chunk_text, f.chunk_text)
+                FROM vec v
+                FULL OUTER JOIN fts f ON v.id = f.id
+                ORDER BY 4 DESC
+                LIMIT %(top_k)s
+                """,
+                {"qvec": vector, "q": query, "since": since, "top_k": top_k, "rrf_k": rrf_k},
+            )
+        else:
+            cur.execute(
+                """
+                WITH vec AS (
+                    SELECT c.id, c.project, c.source_path, c.source_kind, c.chunk_text,
+                           ROW_NUMBER() OVER (ORDER BY c.embedding <=> %(qvec)s::vector) AS rnk
+                    FROM doc_chunks c
+                    WHERE c.project = %(project)s
+                      AND c.created_at >= %(since)s
+                    ORDER BY c.embedding <=> %(qvec)s::vector
+                    LIMIT 50
+                ),
+                fts AS (
+                    SELECT c.id, c.project, c.source_path, c.source_kind, c.chunk_text,
+                           ROW_NUMBER() OVER (ORDER BY bigm_similarity(c.chunk_text, %(q)s) DESC) AS rnk
+                    FROM doc_chunks c
+                    WHERE c.project = %(project)s
+                      AND c.created_at >= %(since)s
+                      AND c.chunk_text =%% %(q)s
+                    ORDER BY bigm_similarity(c.chunk_text, %(q)s) DESC
+                    LIMIT 50
+                )
+                SELECT
+                    COALESCE(v.project, f.project),
+                    COALESCE(v.source_path, f.source_path),
+                    COALESCE(v.source_kind, f.source_kind),
+                    COALESCE(1.0/(%(rrf_k)s + v.rnk), 0) + COALESCE(1.0/(%(rrf_k)s + f.rnk), 0),
+                    COALESCE(v.chunk_text, f.chunk_text)
+                FROM vec v
+                FULL OUTER JOIN fts f ON v.id = f.id
+                ORDER BY 4 DESC
+                LIMIT %(top_k)s
+                """,
+                {"qvec": vector, "q": query, "since": since, "top_k": top_k, "project": project, "rrf_k": rrf_k},
+            )
+        return _rows_to_dicts(cur.fetchall())
+
+    last_results: list[dict] = []
+    for tier in tier_sequence:
+        days = TIER_DAYS[tier]
+        since = datetime.now(timezone.utc) - timedelta(days=days)
+        partitions = get_active_partitions(conn, since)
+        if not partitions:
+            continue
+
+        if mode == "vector":
+            results = _search_vector_since(since)
+        else:
+            results = _search_hybrid_since(since)
+
+        results = sorted(results, key=lambda r: r["score"], reverse=True)
+        last_results = results
+
+        if results and results[0]["score"] >= threshold:
+            return results
+
+    return last_results
+
+
 def run_search_staged(conn, mode: str, project: str, query: str, top_k: int = 5,
                       all_projects: bool = False, min_score: float | None = None,
                       rrf_k: int = 60, spinner=None) -> list[dict]:
@@ -351,6 +532,18 @@ def main():
     parser.add_argument("--recency-boost", type=float, default=0.0, metavar="BOOST",
                         help="날짜 기반 재랭킹 가중치 (기본 0.0=비활성화)")
     parser.add_argument("--no-history", action="store_true", help="검색 이력 저장·로드 비활성화")
+    parser.add_argument(
+        "--tier",
+        choices=["m1", "m3", "m6", "m12", "auto"],
+        default=None,
+        help="멀티스텝 검색 tier (m1=30일, m3=90일, m6=180일, m12=365일, auto=단계적 확장). 미지정 시 전체 테이블 검색(기존 동작 유지)",
+    )
+    parser.add_argument(
+        "--tier-threshold",
+        type=float,
+        default=0.80,
+        help="멀티스텝 검색 확장 임계치 (기본 0.80, top-1 스코어가 이 값 미만이면 다음 tier로 확장)",
+    )
     args = parser.parse_args()
 
     if args.eval:
@@ -382,7 +575,23 @@ def main():
 
     # 3-5: 검색 실행 (fallback 포함)
     with get_db_connection() as conn:
-        if rich:
+        if args.tier is not None:
+            # 멀티스텝 tier 검색 경로
+            vector = embed_query(args.query)
+            tier_list = ["auto"] if args.tier == "auto" else [args.tier]
+            rows = search_multistep(
+                conn,
+                project=project,
+                vector=vector,
+                query=args.query,
+                tiers=tier_list,
+                threshold=args.tier_threshold,
+                top_k=args.top_k,
+                mode=args.mode,
+                all_projects=args.all_projects,
+                rrf_k=args.rrf_k,
+            )
+        elif rich:
             from loregist import tui
             spinner = tui.Spinner(enabled=True)
             rows = run_search_staged(conn, args.mode, project, args.query, top_k=args.top_k,
