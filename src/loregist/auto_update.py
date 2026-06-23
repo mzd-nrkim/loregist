@@ -153,6 +153,39 @@ def build_claude_command(entry_skill: str, project: str) -> list[str]:
     ]
 
 
+def build_search_command(query: str, folders: list[str]) -> list[str]:
+    """파일 agentic 검색용 claude -p argv 리스트를 구성한다.
+
+    Parameters
+    ----------
+    query:
+        검색 쿼리 문자열.
+    folders:
+        검색 대상 폴더 경로 리스트.
+
+    Returns
+    -------
+    list[str]
+        subprocess에 넘길 argv 리스트.
+    """
+    prompt = (
+        f"다음 폴더들에서 '{query}' 를 검색하고 관련 내용을 찾아 반환하라.\n"
+        f"폴더 목록: {', '.join(folders)}\n"
+        "각 결과를 다음 JSON 형식으로 반환하라:\n"
+        '[{"source_path": "<파일경로>", "score": <0.0~1.0>, "chunk_text": "<관련 텍스트>", "confidence": <0.0~1.0>}]'
+    )
+    allowed_tools = "Read,Bash,Glob,Grep"
+    claude_bin = _resolve_claude_bin()
+
+    return [
+        claude_bin,
+        "-p", prompt,
+        "--permission-mode", "acceptEdits",
+        "--output-format", "json",
+        "--allowedTools", allowed_tools,
+    ]
+
+
 def launch_headless(entry_skill: str, project: str, cwd: str) -> dict:
     """헤드리스 Claude를 subprocess로 기동하고 결과 dict를 반환한다.
 

@@ -24,32 +24,49 @@ def embed_query(text: str) -> list[float]:
     return vec[0].tolist()
 
 
-def search_vector(conn, project: str, vector: list[float], top_k: int = 5, all_projects: bool = False, min_score: float | None = None) -> list[dict]:
+def search_vector(conn, project: str, vector: list[float], top_k: int = 5, all_projects: bool = False, min_score: float | None = None, source_kinds: list[str] | None = None, created_at_since: "datetime | None" = None) -> list[dict]:
     cur = conn.cursor()
+    source_filter_sql = "AND source_kind = ANY(%s)" if source_kinds is not None else ""
+    since_filter_sql = "AND created_at >= %s" if created_at_since is not None else ""
     if all_projects:
+        extra_params = []
+        if source_kinds is not None:
+            extra_params.append(source_kinds)
+        if created_at_since is not None:
+            extra_params.append(created_at_since)
         cur.execute(
-            """
+            f"""
             SELECT project, source_path, source_kind,
                    1 - (embedding <=> %s::vector) AS score,
                    chunk_text
             FROM doc_chunks
+            WHERE 1=1
+              {source_filter_sql}
+              {since_filter_sql}
             ORDER BY embedding <=> %s::vector
             LIMIT %s
             """,
-            (vector, vector, top_k),
+            [vector] + extra_params + [vector, top_k],
         )
     else:
+        extra_params = []
+        if source_kinds is not None:
+            extra_params.append(source_kinds)
+        if created_at_since is not None:
+            extra_params.append(created_at_since)
         cur.execute(
-            """
+            f"""
             SELECT project, source_path, source_kind,
                    1 - (embedding <=> %s::vector) AS score,
                    chunk_text
             FROM doc_chunks
             WHERE project = %s
+              {source_filter_sql}
+              {since_filter_sql}
             ORDER BY embedding <=> %s::vector
             LIMIT %s
             """,
-            (vector, project, vector, top_k),
+            [vector, project] + extra_params + [vector, top_k],
         )
     rows = cur.fetchall()
     results = _rows_to_dicts(rows)
@@ -58,37 +75,53 @@ def search_vector(conn, project: str, vector: list[float], top_k: int = 5, all_p
     return results
 
 
-def search_fts(conn, project: str, query: str, top_k: int = 5, all_projects: bool = False) -> list[dict]:
+def search_fts(conn, project: str, query: str, top_k: int = 5, all_projects: bool = False, source_kinds: list[str] | None = None, created_at_since: "datetime | None" = None) -> list[dict]:
     """bigm_similarity 기반 FTS. =% 연산자로 GIN 인덱스 활용, similarity_limit=0.0으로 단어 길이 무관하게 동작."""
     cur = conn.cursor()
     # similarity_limit를 0으로 설정해 짧은 쿼리도 =% 연산자로 필터링되지 않게 함
     cur.execute("SET LOCAL pg_bigm.similarity_limit = 0.0")
+    source_filter_sql = "AND source_kind = ANY(%s)" if source_kinds is not None else ""
+    since_filter_sql = "AND created_at >= %s" if created_at_since is not None else ""
     if all_projects:
+        extra_params: list = []
+        if source_kinds is not None:
+            extra_params.append(source_kinds)
+        if created_at_since is not None:
+            extra_params.append(created_at_since)
         cur.execute(
-            """
+            f"""
             SELECT project, source_path, source_kind,
                    bigm_similarity(chunk_text, %s) AS score,
                    chunk_text
             FROM doc_chunks
             WHERE chunk_text =%% %s
+              {source_filter_sql}
+              {since_filter_sql}
             ORDER BY bigm_similarity(chunk_text, %s) DESC
             LIMIT %s
             """,
-            (query, query, query, top_k),
+            [query, query] + extra_params + [query, top_k],
         )
     else:
+        extra_params = []
+        if source_kinds is not None:
+            extra_params.append(source_kinds)
+        if created_at_since is not None:
+            extra_params.append(created_at_since)
         cur.execute(
-            """
+            f"""
             SELECT project, source_path, source_kind,
                    bigm_similarity(chunk_text, %s) AS score,
                    chunk_text
             FROM doc_chunks
             WHERE project = %s
               AND chunk_text =%% %s
+              {source_filter_sql}
+              {since_filter_sql}
             ORDER BY bigm_similarity(chunk_text, %s) DESC
             LIMIT %s
             """,
-            (query, project, query, query, top_k),
+            [query, project, query] + extra_params + [query, top_k],
         )
     rows = cur.fetchall()
     return _rows_to_dicts(rows)
@@ -127,17 +160,27 @@ def search_like(conn, project: str, query: str, top_k: int = 5, all_projects: bo
     return _rows_to_dicts(rows)
 
 
-def search_hybrid(conn, project: str, vector: list[float], query: str, top_k: int = 5, all_projects: bool = False, rrf_k: int = 60) -> list[dict]:
+def search_hybrid(conn, project: str, vector: list[float], query: str, top_k: int = 5, all_projects: bool = False, rrf_k: int = 60, source_kinds: list[str] | None = None, created_at_since: "datetime | None" = None) -> list[dict]:
     """RRF hybrid: vector CTE + fts CTE FULL OUTER JOIN. rrf_k controls the RRF smoothing constant."""
     cur = conn.cursor()
     cur.execute("SET LOCAL pg_bigm.similarity_limit = 0.0")
+    source_filter_sql = "AND c.source_kind = ANY(%(source_kinds)s)" if source_kinds is not None else ""
+    since_filter_sql = "AND c.created_at >= %(created_at_since)s" if created_at_since is not None else ""
     if all_projects:
+        params: dict = {"qvec": vector, "q": query, "top_k": top_k, "rrf_k": rrf_k}
+        if source_kinds is not None:
+            params["source_kinds"] = source_kinds
+        if created_at_since is not None:
+            params["created_at_since"] = created_at_since
         cur.execute(
-            """
+            f"""
             WITH vec AS (
                 SELECT c.id, c.project, c.source_path, c.source_kind, c.chunk_text,
                        ROW_NUMBER() OVER (ORDER BY c.embedding <=> %(qvec)s::vector) AS rnk
                 FROM doc_chunks c
+                WHERE 1=1
+                  {source_filter_sql}
+                  {since_filter_sql}
                 ORDER BY c.embedding <=> %(qvec)s::vector
                 LIMIT 50
             ),
@@ -146,6 +189,8 @@ def search_hybrid(conn, project: str, vector: list[float], query: str, top_k: in
                        ROW_NUMBER() OVER (ORDER BY bigm_similarity(c.chunk_text, %(q)s) DESC) AS rnk
                 FROM doc_chunks c
                 WHERE c.chunk_text =%% %(q)s
+                  {source_filter_sql}
+                  {since_filter_sql}
                 ORDER BY bigm_similarity(c.chunk_text, %(q)s) DESC
                 LIMIT 50
             )
@@ -160,16 +205,23 @@ def search_hybrid(conn, project: str, vector: list[float], query: str, top_k: in
             ORDER BY rrf_score DESC
             LIMIT %(top_k)s
             """,
-            {"qvec": vector, "q": query, "top_k": top_k, "rrf_k": rrf_k},
+            params,
         )
     else:
+        params = {"qvec": vector, "q": query, "top_k": top_k, "project": project, "rrf_k": rrf_k}
+        if source_kinds is not None:
+            params["source_kinds"] = source_kinds
+        if created_at_since is not None:
+            params["created_at_since"] = created_at_since
         cur.execute(
-            """
+            f"""
             WITH vec AS (
                 SELECT c.id, c.project, c.source_path, c.source_kind, c.chunk_text,
                        ROW_NUMBER() OVER (ORDER BY c.embedding <=> %(qvec)s::vector) AS rnk
                 FROM doc_chunks c
                 WHERE c.project = %(project)s
+                  {source_filter_sql}
+                  {since_filter_sql}
                 ORDER BY c.embedding <=> %(qvec)s::vector
                 LIMIT 50
             ),
@@ -179,6 +231,8 @@ def search_hybrid(conn, project: str, vector: list[float], query: str, top_k: in
                 FROM doc_chunks c
                 WHERE c.project = %(project)s
                   AND c.chunk_text =%% %(q)s
+                  {source_filter_sql}
+                  {since_filter_sql}
                 ORDER BY bigm_similarity(c.chunk_text, %(q)s) DESC
                 LIMIT 50
             )
@@ -193,7 +247,7 @@ def search_hybrid(conn, project: str, vector: list[float], query: str, top_k: in
             ORDER BY rrf_score DESC
             LIMIT %(top_k)s
             """,
-            {"qvec": vector, "q": query, "top_k": top_k, "project": project, "rrf_k": rrf_k},
+            params,
         )
     rows = cur.fetchall()
     return _rows_to_dicts(rows)
@@ -245,56 +299,65 @@ def search_multistep(
     tiers: ["m1","m3","m6","m12"] 또는 ["auto"] (auto는 m1→m3→m6→m12 순 확장)
     threshold: top-1 score가 이 값 이상이면 즉시 반환
     """
-    TIER_DAYS = {"m1": 30, "m3": 90, "m6": 180, "m12": 365}
-    ALL_TIERS = ["m1", "m3", "m6", "m12"]
+    TIER_DAYS = {"m1": 30, "m3": 90, "m6": 180, "m12": 365, "all": None}
+    ALL_TIERS = ["m1", "m3", "m6", "m12", "all"]
 
     if tiers is None or tiers == ["auto"] or "auto" in tiers:
         tier_sequence = ALL_TIERS
     else:
         tier_sequence = [t for t in ALL_TIERS if t in tiers]
 
-    def _search_vector_since(since: datetime) -> list[dict]:
+    def _search_vector_since(since: "datetime | None") -> list[dict]:
         cur = conn.cursor()
+        since_sql = "AND created_at >= %s" if since is not None else ""
         if all_projects:
+            extra: list = [since] if since is not None else []
             cur.execute(
-                """
+                f"""
                 SELECT project, source_path, source_kind,
                        1 - (embedding <=> %s::vector) AS score,
                        chunk_text
                 FROM doc_chunks
-                WHERE created_at >= %s
+                WHERE 1=1
+                  {since_sql}
                 ORDER BY embedding <=> %s::vector
                 LIMIT %s
                 """,
-                (vector, since, vector, top_k),
+                [vector] + extra + [vector, top_k],
             )
         else:
+            extra = [since] if since is not None else []
             cur.execute(
-                """
+                f"""
                 SELECT project, source_path, source_kind,
                        1 - (embedding <=> %s::vector) AS score,
                        chunk_text
                 FROM doc_chunks
                 WHERE project = %s
-                  AND created_at >= %s
+                  {since_sql}
                 ORDER BY embedding <=> %s::vector
                 LIMIT %s
                 """,
-                (vector, project, since, vector, top_k),
+                [vector, project] + extra + [vector, top_k],
             )
         return _rows_to_dicts(cur.fetchall())
 
-    def _search_hybrid_since(since: datetime) -> list[dict]:
+    def _search_hybrid_since(since: "datetime | None") -> list[dict]:
         cur = conn.cursor()
         cur.execute("SET LOCAL pg_bigm.similarity_limit = 0.0")
+        since_sql = "AND c.created_at >= %(since)s" if since is not None else ""
         if all_projects:
+            p: dict = {"qvec": vector, "q": query, "top_k": top_k, "rrf_k": rrf_k}
+            if since is not None:
+                p["since"] = since
             cur.execute(
-                """
+                f"""
                 WITH vec AS (
                     SELECT c.id, c.project, c.source_path, c.source_kind, c.chunk_text,
                            ROW_NUMBER() OVER (ORDER BY c.embedding <=> %(qvec)s::vector) AS rnk
                     FROM doc_chunks c
-                    WHERE c.created_at >= %(since)s
+                    WHERE 1=1
+                      {since_sql}
                     ORDER BY c.embedding <=> %(qvec)s::vector
                     LIMIT 50
                 ),
@@ -302,8 +365,8 @@ def search_multistep(
                     SELECT c.id, c.project, c.source_path, c.source_kind, c.chunk_text,
                            ROW_NUMBER() OVER (ORDER BY bigm_similarity(c.chunk_text, %(q)s) DESC) AS rnk
                     FROM doc_chunks c
-                    WHERE c.created_at >= %(since)s
-                      AND c.chunk_text =%% %(q)s
+                    WHERE c.chunk_text =%% %(q)s
+                      {since_sql}
                     ORDER BY bigm_similarity(c.chunk_text, %(q)s) DESC
                     LIMIT 50
                 )
@@ -318,17 +381,20 @@ def search_multistep(
                 ORDER BY 4 DESC
                 LIMIT %(top_k)s
                 """,
-                {"qvec": vector, "q": query, "since": since, "top_k": top_k, "rrf_k": rrf_k},
+                p,
             )
         else:
+            p = {"qvec": vector, "q": query, "top_k": top_k, "project": project, "rrf_k": rrf_k}
+            if since is not None:
+                p["since"] = since
             cur.execute(
-                """
+                f"""
                 WITH vec AS (
                     SELECT c.id, c.project, c.source_path, c.source_kind, c.chunk_text,
                            ROW_NUMBER() OVER (ORDER BY c.embedding <=> %(qvec)s::vector) AS rnk
                     FROM doc_chunks c
                     WHERE c.project = %(project)s
-                      AND c.created_at >= %(since)s
+                      {since_sql}
                     ORDER BY c.embedding <=> %(qvec)s::vector
                     LIMIT 50
                 ),
@@ -337,8 +403,8 @@ def search_multistep(
                            ROW_NUMBER() OVER (ORDER BY bigm_similarity(c.chunk_text, %(q)s) DESC) AS rnk
                     FROM doc_chunks c
                     WHERE c.project = %(project)s
-                      AND c.created_at >= %(since)s
                       AND c.chunk_text =%% %(q)s
+                      {since_sql}
                     ORDER BY bigm_similarity(c.chunk_text, %(q)s) DESC
                     LIMIT 50
                 )
@@ -353,12 +419,24 @@ def search_multistep(
                 ORDER BY 4 DESC
                 LIMIT %(top_k)s
                 """,
-                {"qvec": vector, "q": query, "since": since, "top_k": top_k, "project": project, "rrf_k": rrf_k},
+                p,
             )
         return _rows_to_dicts(cur.fetchall())
 
     last_results: list[dict] = []
     for tier in tier_sequence:
+        if tier == "all":
+            # since=None → 시간 제한 없이 전체 검색
+            if mode == "vector":
+                results = _search_vector_since(None)
+            else:
+                results = _search_hybrid_since(None)
+            results = sorted(results, key=lambda r: r["score"], reverse=True)
+            last_results = results
+            if results and results[0]["score"] >= threshold:
+                return results
+            continue
+
         days = TIER_DAYS[tier]
         since = datetime.now(timezone.utc) - timedelta(days=days)
         partitions = get_active_partitions(conn, since)
@@ -424,6 +502,295 @@ def run_search(conn, mode: str, project: str, query: str, top_k: int = 5,
         vector = embed_query(query)
         return search_hybrid(conn, project, vector, query, top_k=top_k, all_projects=all_projects, rrf_k=rrf_k)
     raise ValueError(f"알 수 없는 모드: {mode}")
+
+
+# ─── Q-1-2~Q-1-4: wiki/hot/cold tier 검색 함수 ───────────────────────────────
+
+def search_wiki(
+    conn,
+    project: str,
+    vector: list[float],
+    query: str,
+    top_k: int = 5,
+    all_projects: bool = False,
+    rrf_k: int = 60,
+) -> "tuple[list[dict], float]":
+    """wiki(catalog/handbook) 청크만 hybrid 검색. 게이트용 cosine top-1 score도 반환."""
+    results = search_hybrid(
+        conn, project, vector, query,
+        top_k=top_k, all_projects=all_projects, rrf_k=rrf_k,
+        source_kinds=["catalog", "handbook"],
+    )
+    vec_results = search_vector(
+        conn, project, vector,
+        top_k=1, all_projects=all_projects,
+        source_kinds=["catalog", "handbook"],
+    )
+    cosine_top1 = vec_results[0]["score"] if vec_results else 0.0
+    return results, cosine_top1
+
+
+def search_hot(
+    conn,
+    project: str,
+    vector: list[float],
+    query: str,
+    hot_days: int,
+    top_k: int = 5,
+    all_projects: bool = False,
+    rrf_k: int = 60,
+) -> "tuple[list[dict], float]":
+    """최근 hot_days 이내 md/log 청크 hybrid 검색. 게이트용 cosine top-1 score도 반환."""
+    since = datetime.now(timezone.utc) - timedelta(days=hot_days)
+    results = search_hybrid(
+        conn, project, vector, query,
+        top_k=top_k, all_projects=all_projects, rrf_k=rrf_k,
+        source_kinds=["md", "log"],
+        created_at_since=since,
+    )
+    vec_results = search_vector(
+        conn, project, vector,
+        top_k=1, all_projects=all_projects,
+        source_kinds=["md", "log"],
+        created_at_since=since,
+    )
+    cosine_top1 = vec_results[0]["score"] if vec_results else 0.0
+    return results, cosine_top1
+
+
+def search_cold_raw(
+    conn,
+    project: str,
+    vector: list[float],
+    query: str,
+    threshold: float = 0.80,
+    top_k: int = 5,
+    all_projects: bool = False,
+    rrf_k: int = 60,
+) -> list[dict]:
+    """search_multistep 재사용 — m1~m12~all tier 순차 확장."""
+    return search_multistep(
+        conn,
+        project=project,
+        vector=vector,
+        query=query,
+        tiers=["auto"],
+        threshold=threshold,
+        top_k=top_k,
+        mode="hybrid",
+        all_projects=all_projects,
+        rrf_k=rrf_k,
+    )
+
+
+# ─── Q-2-1: 파일 검색 폴더 수집 ───────────────────────────────────────────────
+
+def get_search_file_folders(project: str) -> list[str]:
+    """프로젝트 설정에서 agentic 파일 검색 대상 폴더 목록을 반환한다."""
+    import datetime as _dt
+    cfg = PROJECTS.get(project, {})
+    folders: list[str] = []
+    seen: set[str] = set()
+
+    def _add(p: "Path | str | None") -> None:
+        if p is None:
+            return
+        s = str(p)
+        if s not in seen and Path(s).exists():
+            seen.add(s)
+            folders.append(s)
+
+    # catalog 경로
+    catalog = cfg.get("catalog")
+    if catalog is not None:
+        _add(catalog)
+
+    # handbook 파일들의 부모 디렉터리
+    for entry in cfg.get("handbook", []):
+        parent = Path(str(entry["path"])).parent
+        _add(parent)
+
+    # docs_root 아래 날짜 폴더 (hot_days 이내, _wiki 제외)
+    docs_root = cfg.get("docs_root")
+    hot_days = cfg.get("hot_days", 7)
+    if docs_root is not None:
+        today = _dt.date.today()
+        for child in Path(str(docs_root)).iterdir():
+            if child.name == "_wiki":
+                continue
+            if not child.is_dir():
+                continue
+            try:
+                folder_date = _dt.date.fromisoformat(child.name)
+                if (today - folder_date).days <= hot_days:
+                    _add(child)
+            except ValueError:
+                pass
+
+    return folders
+
+
+# ─── Q-2-3: agentic 파일 검색 ─────────────────────────────────────────────────
+
+def search_files_agentic(query: str, project: str) -> list[dict]:
+    """파일 기반 agentic 검색. claude subprocess를 기동해 폴더에서 관련 내용을 찾는다."""
+    import subprocess
+    import os
+    from loregist import auto_update
+
+    folders = get_search_file_folders(project)
+    if not folders:
+        return []
+
+    argv = auto_update.build_search_command(query, folders)
+    child_env = os.environ.copy()
+    child_env["LOREGIST_AUTO_GUARD"] = "1"
+    try:
+        proc = subprocess.run(argv, env=child_env, capture_output=True, text=True, timeout=120)
+    except (FileNotFoundError, OSError):
+        return []
+    except subprocess.TimeoutExpired:
+        return []
+    if proc.returncode != 0:
+        return []
+
+    report = auto_update.parse_report(proc.stdout)
+    summary = report.get("summary", "")
+    # summary에서 JSON 리스트 파싱 시도
+    try:
+        import json as _json
+        raw_list = _json.loads(summary)
+        if not isinstance(raw_list, list):
+            return []
+    except (ValueError, TypeError):
+        return []
+
+    results: list[dict] = []
+    for r in raw_list:
+        if not isinstance(r, dict):
+            continue
+        results.append({
+            "path": r.get("source_path", ""),
+            "score": float(r.get("score", 0.0)),
+            "text": r.get("chunk_text", ""),
+            "kind": "file",
+            "project": project,
+            "confidence": float(r.get("confidence", 0.0)),
+        })
+    return results
+
+
+# ─── Q-3-6: 헬퍼 함수 ─────────────────────────────────────────────────────────
+
+def _merge_dedup(base: list[dict], new: list[dict]) -> list[dict]:
+    """path 기준 dedup. 동일 path면 최고 score 행 보존."""
+    seen = {r["path"]: r for r in base}
+    for r in new:
+        p = r["path"]
+        if p not in seen or r["score"] > seen[p]["score"]:
+            seen[p] = r
+    return list(seen.values())
+
+
+def _sort_results(results: list[dict]) -> list[dict]:
+    return sorted(results, key=lambda r: r["score"], reverse=True)
+
+
+# ─── Q-3: 오케스트레이터 ───────────────────────────────────────────────────────
+
+def search_tiered(
+    conn,
+    project: str,
+    query: str,
+    *,
+    strategy: str = "single",
+    threshold: float = 0.80,
+    top_k: int = 5,
+    recency_boost: bool = False,
+    all_projects: bool = False,
+    rrf_k: int = 60,
+    wiki_boost: float = 1.0,
+    rich: bool = False,
+) -> list[dict]:
+    """wiki우선 cascade 다단계검색 오케스트레이터."""
+    import concurrent.futures
+
+    # Q-3-1: single strategy
+    if strategy == "single":
+        return run_search(conn, "hybrid", project, query, top_k=top_k, all_projects=all_projects, rrf_k=rrf_k)
+
+    # Q-3-2: cascade strategy
+    if strategy == "cascade":
+        vector = embed_query(query)
+        tier_order = ["hot", "wiki"] if recency_boost else ["wiki", "hot"]
+        results: list[dict] = []
+        for tier_name in tier_order:
+            if tier_name == "wiki":
+                tier_results, cosine = search_wiki(conn, project, vector, query, top_k=top_k, all_projects=all_projects, rrf_k=rrf_k)
+            else:
+                hot_days = PROJECTS[project]["hot_days"] if not all_projects else 7
+                tier_results, cosine = search_hot(conn, project, vector, query, hot_days=hot_days, top_k=top_k, all_projects=all_projects, rrf_k=rrf_k)
+            results = _merge_dedup(results, tier_results)
+            if cosine >= threshold:
+                return _sort_results(results)
+        # tier 3 - cold raw
+        cold_results = search_cold_raw(conn, project, vector, query, threshold=threshold, top_k=top_k, all_projects=all_projects, rrf_k=rrf_k)
+        results = _merge_dedup(results, cold_results)
+        return _sort_results(results)
+
+    # Q-3-3: fusion strategy
+    if strategy == "fusion":
+        vector = embed_query(query)
+        wiki_results, _ = search_wiki(conn, project, vector, query, top_k=top_k, all_projects=all_projects, rrf_k=rrf_k)
+        hot_days = PROJECTS[project]["hot_days"] if not all_projects else 7
+        hot_results, _ = search_hot(conn, project, vector, query, hot_days=hot_days, top_k=top_k, all_projects=all_projects, rrf_k=rrf_k)
+        cold_results = search_cold_raw(conn, project, vector, query, threshold=threshold, top_k=top_k, all_projects=all_projects, rrf_k=rrf_k)
+        file_results = search_files_agentic(query, project)
+        if wiki_boost != 1.0:
+            for r in wiki_results + hot_results:
+                r["score"] *= wiki_boost
+        all_res = _merge_dedup(wiki_results, hot_results)
+        all_res = _merge_dedup(all_res, cold_results)
+        all_res = _merge_dedup(all_res, file_results)
+        return _sort_results(all_res)[:top_k]
+
+    # Q-3-4: speculative strategy
+    if strategy == "speculative":
+        vector = embed_query(query)
+        # 파일검색 백그라운드 발사
+        executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+        file_future = executor.submit(search_files_agentic, query, project)
+
+        # DB tier cascade 진행
+        all_res_spec: list[dict] = []
+        tier_order_spec = ["hot", "wiki"] if recency_boost else ["wiki", "hot"]
+        early_exit = False
+        for tier_name in tier_order_spec:
+            if tier_name == "wiki":
+                tier_results, cosine = search_wiki(conn, project, vector, query, top_k=top_k, all_projects=all_projects, rrf_k=rrf_k)
+            else:
+                hot_days = PROJECTS[project]["hot_days"] if not all_projects else 7
+                tier_results, cosine = search_hot(conn, project, vector, query, hot_days=hot_days, top_k=top_k, all_projects=all_projects, rrf_k=rrf_k)
+            all_res_spec = _merge_dedup(all_res_spec, tier_results)
+            if cosine >= threshold:
+                early_exit = True
+                break
+        if not early_exit:
+            cold_results = search_cold_raw(conn, project, vector, query, threshold=threshold, top_k=top_k, all_projects=all_projects, rrf_k=rrf_k)
+            all_res_spec = _merge_dedup(all_res_spec, cold_results)
+
+        # 파일 future 대기
+        try:
+            file_results = file_future.result(timeout=130)
+            all_res_spec = _merge_dedup(all_res_spec, file_results)
+        except (concurrent.futures.TimeoutError, Exception):
+            pass
+        finally:
+            executor.shutdown(wait=False)
+
+        return _sort_results(all_res_spec)[:top_k]
+
+    raise ValueError(f"알 수 없는 strategy: {strategy}")
 
 
 def fetch_context_chunks(conn, project: str, source_path: str, center_idx: int, window: int = 1) -> list[dict]:
@@ -544,6 +911,24 @@ def main():
         default=0.80,
         help="멀티스텝 검색 확장 임계치 (기본 0.80, top-1 스코어가 이 값 미만이면 다음 tier로 확장)",
     )
+    parser.add_argument(
+        "--strategy",
+        choices=["single", "cascade", "fusion", "speculative"],
+        default="single",
+        help="다단계 검색 전략 (기본: single=현행 단일 hybrid)",
+    )
+    parser.add_argument(
+        "--cascade-threshold",
+        type=float,
+        default=0.80,
+        help="cascade/speculative 종료 cosine 임계치 (기본 0.80)",
+    )
+    parser.add_argument(
+        "--wiki-boost",
+        type=float,
+        default=1.0,
+        help="fusion 전략에서 wiki/hot 청크 score 배율 (기본 1.0)",
+    )
     args = parser.parse_args()
 
     if args.eval:
@@ -590,6 +975,20 @@ def main():
                 mode=args.mode,
                 all_projects=args.all_projects,
                 rrf_k=args.rrf_k,
+            )
+        elif args.strategy != "single":
+            rows = search_tiered(
+                conn,
+                project=project,
+                query=args.query,
+                strategy=args.strategy,
+                threshold=args.cascade_threshold,
+                top_k=args.top_k,
+                recency_boost=(args.recency_boost != 0.0),
+                all_projects=args.all_projects,
+                rrf_k=args.rrf_k,
+                wiki_boost=args.wiki_boost,
+                rich=rich,
             )
         elif rich:
             from loregist import tui
