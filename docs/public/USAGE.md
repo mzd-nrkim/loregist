@@ -58,7 +58,8 @@ loregist watch --dir ~/notes            # 특정 디렉터리 감시
 
 # 라이프사이클
 loregist rotate --dry-run               # 이동 대상 미리보기
-loregist rotate                         # vault 이동 실행
+loregist rotate                         # vault 이동 실행 (대상 확장자: projects.toml extensions, 기본 md·log·txt)
+loregist rotate --extensions md,log,txt # 확장자 런타임 override (우선순위: CLI > projects.toml > 기본값)
 # ⚠️  vault-cleanup: 파괴적 opt-in — projects.toml에 vault_cleanup 키 설정 필수, 삭제는 비가역(파일 unlink)
 loregist vault-cleanup --project <키> --dry-run   # 정리 대상 미리보기 (기본값, 실제 삭제 없음)
 loregist vault-cleanup --project <키> --apply     # 실제 삭제 실행 (--apply 명시 필수, DB full_text는 보존)
@@ -200,11 +201,14 @@ JIRA_URL=https://yourorg.atlassian.net JIRA_TOKEN=<token> ./scripts/examples/jir
 `loregist rotate`는 hot 파일 중 일정 기간이 지난 것을 vault(cold)로 이동한다.
 
 ```bash
-loregist rotate --dry-run   # 이동 대상 미리보기
-loregist rotate             # 실행
+loregist rotate --dry-run                # 이동 대상 미리보기
+loregist rotate                          # 실행
+loregist rotate --extensions md,log,txt  # 확장자 런타임 override
 ```
 
 > **HOT 기간 변경**: 기준일은 기본 7일(`ROTATE_TO_VAULT_DAYS`)이며, `projects.toml` 프로젝트 블록에 `hot_days = <int>`를 선언하면 해당 프로젝트에만 적용된다. 미선언 시 7일 기본값 유지.
+
+> **대상 확장자**: rotate는 `projects.toml`의 `extensions`(기본 `["md", "log", "txt"]`)를 동일하게 적용한다. `--extensions md,log,txt` CLI 옵션으로 런타임 override 가능. 우선순위: CLI > projects.toml extensions > 기본값.
 
 ### vault_cleanup — Cold 파일 삭제
 

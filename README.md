@@ -97,6 +97,7 @@ loregist를 이미 아는 개념으로 위치 짓는다면:
 loregist embed                  # 현재 프로젝트 임베딩 (--incremental: 변경분만)
 loregist search "쿼리"          # hybrid 시맨틱 검색 (--mode fts / --all-projects / --json)
 loregist rotate                 # Hot → vault 이동 (라이프사이클, 7일 초과분)
+loregist rotate --extensions md,log,txt  # 확장자 런타임 override (기본: projects.toml extensions)
 loregist project list           # 등록 프로젝트 목록
 loregist catalog --project {p}  # _wiki/ topic·decision 인덱스 갱신
 ```

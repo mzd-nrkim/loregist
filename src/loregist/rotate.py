@@ -16,9 +16,29 @@ import sys
 from datetime import date, datetime
 from pathlib import Path
 
-from loregist.config import PROJECTS, get_db_connection, infer_project
+from loregist.config import DEFAULT_EXTENSIONS, PROJECTS, get_db_connection, infer_project
 
 _IGNORE_FOR_EMPTY: frozenset[str] = frozenset({".DS_Store", ".gitkeep"})
+
+
+# ---------------------------------------------------------------------------
+# CLI 헬퍼
+# ---------------------------------------------------------------------------
+
+def _parse_extensions(raw: str | None) -> list[str] | None:
+    """
+    CLI --extensions 값을 정규화된 확장자 리스트로 변환한다.
+
+    - raw가 None이면 None 반환 (toml/기본값 폴백 신호).
+    - 쉼표 또는 공백으로 split → strip → 앞쪽 '.' 제거 → 소문자화 → 빈 토큰 제거.
+    - 정규화 후 항목이 0개면 None 반환 (toml/기본값 폴백).
+    """
+    if raw is None:
+        return None
+    import re
+    tokens = re.split(r"[,\s]+", raw)
+    cleaned = [t.lstrip(".").lower() for t in tokens if t.strip()]
+    return cleaned if cleaned else None
 
 
 # ---------------------------------------------------------------------------
@@ -54,7 +74,7 @@ def discover_rotate_targets(project: str, extensions: list[str] | None = None) -
         return []
 
     if extensions is None:
-        extensions = cfg.get("extensions", ["md", "log", "txt"])
+        extensions = cfg.get("extensions", DEFAULT_EXTENSIONS)
 
     today = date.today()
     results: list[tuple[Path, int]] = []
@@ -107,7 +127,7 @@ def discover_done_rotate_targets(project: str, extensions: list[str] | None = No
         return []
 
     if extensions is None:
-        extensions = cfg.get("extensions", ["md", "log", "txt"])
+        extensions = cfg.get("extensions", DEFAULT_EXTENSIONS)
 
     today = date.today()
     results: list[tuple[Path, int]] = []
@@ -286,6 +306,10 @@ def main():
         action="store_true",
         help="이동 대상 목록과 경과일·임베딩 여부만 출력, 파일시스템/git 변경 없음",
     )
+    parser.add_argument(
+        "--extensions",
+        help="rotate 대상 확장자 (쉼표/공백 구분, dot 없이. 예: md,log,txt). 미지정 시 projects.toml extensions → 기본값 폴백",
+    )
     args = parser.parse_args()
 
     project = infer_project(explicit=args.project)
@@ -298,8 +322,9 @@ def main():
 
     print(f"프로젝트: {project}  (rotate 기준: {PROJECTS[project]['hot_days']}일 초과)")
 
-    targets = discover_rotate_targets(project)
-    done_targets = discover_done_rotate_targets(project)
+    parsed = _parse_extensions(args.extensions)
+    targets = discover_rotate_targets(project, extensions=parsed)
+    done_targets = discover_done_rotate_targets(project, extensions=parsed)
     if not targets and not done_targets:
         print("이동 대상 파일 없음.")
         return

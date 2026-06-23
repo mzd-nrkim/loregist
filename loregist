@@ -62,7 +62,7 @@ case "$subcmd" in
     echo "  embed         [--project P] [--dry-run] [--include-today]  문서/로그 임베딩"
     echo "  search        <쿼리> [--top-k N] [--project P] [--all-projects] [--plain|--json|--open N|--no-interactive]  시맨틱 검색"
     echo "  project       <add|list|current>            프로젝트 그룹 커맨드 (온보딩·목록·현재 추론)"
-    echo "  rotate        [--project P] [--dry-run]   7일 초과 날짜폴더 → vault 이동 (임베딩 전제)"
+    echo "  rotate        [--project P] [--dry-run] [--extensions md,log,txt]   7일 초과 날짜폴더 → vault 이동 (임베딩 전제)"
     echo "  status                                     프로젝트별 임베딩 현황 대시보드"
     echo "  similar       <파일경로> [--top-k N]       특정 파일과 유사한 과거 문서 찾기"
     echo "  vault-cleanup [--project P] [--dry-run|--apply]  vault/cold 파일 DB 대조 후 정리"

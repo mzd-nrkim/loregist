@@ -46,8 +46,9 @@
 #   hot_days = 14    # 14일 경과 시 vault로 rotate
 #
 # extensions (기본 ["md", "log", "txt"] — 키 생략 시 기본값 적용):
-#   extensions = ["md", "log", "txt"]  → embed/watch 대상 확장자 선언 (dot 없이)
+#   extensions = ["md", "log", "txt"]  → embed/watch/rotate 대상 확장자 선언 (dot 없이)
 #   키 생략                            → 기본값 ["md", "log", "txt"] 적용
+#   ※ rotate도 동일 extensions 적용 (미지정 시 기본값, --extensions md,log,txt 로 런타임 override 가능)
 #
 # 예시:
 #   [projects.my-project]
