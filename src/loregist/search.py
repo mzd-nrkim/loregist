@@ -728,7 +728,7 @@ def search_tiered(
             if tier_name == "wiki":
                 tier_results, cosine = search_wiki(conn, project, vector, query, top_k=top_k, all_projects=all_projects, rrf_k=rrf_k)
             else:
-                hot_days = PROJECTS[project]["hot_days"] if not all_projects else 7
+                hot_days = PROJECTS.get(project, {}).get("hot_days", 7) if not all_projects else 7
                 tier_results, cosine = search_hot(conn, project, vector, query, hot_days=hot_days, top_k=top_k, all_projects=all_projects, rrf_k=rrf_k)
             results = _merge_dedup(results, tier_results)
             if cosine >= threshold:
@@ -769,7 +769,7 @@ def search_tiered(
             if tier_name == "wiki":
                 tier_results, cosine = search_wiki(conn, project, vector, query, top_k=top_k, all_projects=all_projects, rrf_k=rrf_k)
             else:
-                hot_days = PROJECTS[project]["hot_days"] if not all_projects else 7
+                hot_days = PROJECTS.get(project, {}).get("hot_days", 7) if not all_projects else 7
                 tier_results, cosine = search_hot(conn, project, vector, query, hot_days=hot_days, top_k=top_k, all_projects=all_projects, rrf_k=rrf_k)
             all_res_spec = _merge_dedup(all_res_spec, tier_results)
             if cosine >= threshold:
