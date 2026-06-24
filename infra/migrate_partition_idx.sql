@@ -2,96 +2,96 @@
 -- CONCURRENTLY 사용으로 BEGIN/COMMIT 블록 없이 실행해야 함.
 
 -- 2025-01
-CREATE INDEX CONCURRENTLY ON doc_chunks_2025_01 USING ivfflat (embedding vector_cosine_ops) WITH (lists=1);
-CREATE INDEX CONCURRENTLY ON doc_chunks_2025_01 USING gin (chunk_text gin_bigm_ops);
-CREATE INDEX CONCURRENTLY ON doc_chunks_2025_01 (project);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS doc_chunks_2025_01_embedding_idx ON doc_chunks_2025_01 USING ivfflat (embedding vector_cosine_ops) WITH (lists=1);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS doc_chunks_2025_01_chunk_text_idx ON doc_chunks_2025_01 USING gin (chunk_text gin_bigm_ops);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS doc_chunks_2025_01_project_idx ON doc_chunks_2025_01 (project);
 
 -- 2025-02
-CREATE INDEX CONCURRENTLY ON doc_chunks_2025_02 USING ivfflat (embedding vector_cosine_ops) WITH (lists=1);
-CREATE INDEX CONCURRENTLY ON doc_chunks_2025_02 USING gin (chunk_text gin_bigm_ops);
-CREATE INDEX CONCURRENTLY ON doc_chunks_2025_02 (project);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS doc_chunks_2025_02_embedding_idx ON doc_chunks_2025_02 USING ivfflat (embedding vector_cosine_ops) WITH (lists=1);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS doc_chunks_2025_02_chunk_text_idx ON doc_chunks_2025_02 USING gin (chunk_text gin_bigm_ops);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS doc_chunks_2025_02_project_idx ON doc_chunks_2025_02 (project);
 
 -- 2025-03
-CREATE INDEX CONCURRENTLY ON doc_chunks_2025_03 USING ivfflat (embedding vector_cosine_ops) WITH (lists=1);
-CREATE INDEX CONCURRENTLY ON doc_chunks_2025_03 USING gin (chunk_text gin_bigm_ops);
-CREATE INDEX CONCURRENTLY ON doc_chunks_2025_03 (project);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS doc_chunks_2025_03_embedding_idx ON doc_chunks_2025_03 USING ivfflat (embedding vector_cosine_ops) WITH (lists=1);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS doc_chunks_2025_03_chunk_text_idx ON doc_chunks_2025_03 USING gin (chunk_text gin_bigm_ops);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS doc_chunks_2025_03_project_idx ON doc_chunks_2025_03 (project);
 
 -- 2025-04
-CREATE INDEX CONCURRENTLY ON doc_chunks_2025_04 USING ivfflat (embedding vector_cosine_ops) WITH (lists=1);
-CREATE INDEX CONCURRENTLY ON doc_chunks_2025_04 USING gin (chunk_text gin_bigm_ops);
-CREATE INDEX CONCURRENTLY ON doc_chunks_2025_04 (project);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS doc_chunks_2025_04_embedding_idx ON doc_chunks_2025_04 USING ivfflat (embedding vector_cosine_ops) WITH (lists=1);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS doc_chunks_2025_04_chunk_text_idx ON doc_chunks_2025_04 USING gin (chunk_text gin_bigm_ops);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS doc_chunks_2025_04_project_idx ON doc_chunks_2025_04 (project);
 
 -- 2025-05
-CREATE INDEX CONCURRENTLY ON doc_chunks_2025_05 USING ivfflat (embedding vector_cosine_ops) WITH (lists=1);
-CREATE INDEX CONCURRENTLY ON doc_chunks_2025_05 USING gin (chunk_text gin_bigm_ops);
-CREATE INDEX CONCURRENTLY ON doc_chunks_2025_05 (project);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS doc_chunks_2025_05_embedding_idx ON doc_chunks_2025_05 USING ivfflat (embedding vector_cosine_ops) WITH (lists=1);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS doc_chunks_2025_05_chunk_text_idx ON doc_chunks_2025_05 USING gin (chunk_text gin_bigm_ops);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS doc_chunks_2025_05_project_idx ON doc_chunks_2025_05 (project);
 
 -- 2025-06
-CREATE INDEX CONCURRENTLY ON doc_chunks_2025_06 USING ivfflat (embedding vector_cosine_ops) WITH (lists=1);
-CREATE INDEX CONCURRENTLY ON doc_chunks_2025_06 USING gin (chunk_text gin_bigm_ops);
-CREATE INDEX CONCURRENTLY ON doc_chunks_2025_06 (project);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS doc_chunks_2025_06_embedding_idx ON doc_chunks_2025_06 USING ivfflat (embedding vector_cosine_ops) WITH (lists=1);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS doc_chunks_2025_06_chunk_text_idx ON doc_chunks_2025_06 USING gin (chunk_text gin_bigm_ops);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS doc_chunks_2025_06_project_idx ON doc_chunks_2025_06 (project);
 
 -- 2025-07
-CREATE INDEX CONCURRENTLY ON doc_chunks_2025_07 USING ivfflat (embedding vector_cosine_ops) WITH (lists=1);
-CREATE INDEX CONCURRENTLY ON doc_chunks_2025_07 USING gin (chunk_text gin_bigm_ops);
-CREATE INDEX CONCURRENTLY ON doc_chunks_2025_07 (project);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS doc_chunks_2025_07_embedding_idx ON doc_chunks_2025_07 USING ivfflat (embedding vector_cosine_ops) WITH (lists=1);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS doc_chunks_2025_07_chunk_text_idx ON doc_chunks_2025_07 USING gin (chunk_text gin_bigm_ops);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS doc_chunks_2025_07_project_idx ON doc_chunks_2025_07 (project);
 
 -- 2025-08
-CREATE INDEX CONCURRENTLY ON doc_chunks_2025_08 USING ivfflat (embedding vector_cosine_ops) WITH (lists=1);
-CREATE INDEX CONCURRENTLY ON doc_chunks_2025_08 USING gin (chunk_text gin_bigm_ops);
-CREATE INDEX CONCURRENTLY ON doc_chunks_2025_08 (project);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS doc_chunks_2025_08_embedding_idx ON doc_chunks_2025_08 USING ivfflat (embedding vector_cosine_ops) WITH (lists=1);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS doc_chunks_2025_08_chunk_text_idx ON doc_chunks_2025_08 USING gin (chunk_text gin_bigm_ops);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS doc_chunks_2025_08_project_idx ON doc_chunks_2025_08 (project);
 
 -- 2025-09
-CREATE INDEX CONCURRENTLY ON doc_chunks_2025_09 USING ivfflat (embedding vector_cosine_ops) WITH (lists=1);
-CREATE INDEX CONCURRENTLY ON doc_chunks_2025_09 USING gin (chunk_text gin_bigm_ops);
-CREATE INDEX CONCURRENTLY ON doc_chunks_2025_09 (project);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS doc_chunks_2025_09_embedding_idx ON doc_chunks_2025_09 USING ivfflat (embedding vector_cosine_ops) WITH (lists=1);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS doc_chunks_2025_09_chunk_text_idx ON doc_chunks_2025_09 USING gin (chunk_text gin_bigm_ops);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS doc_chunks_2025_09_project_idx ON doc_chunks_2025_09 (project);
 
 -- 2025-10
-CREATE INDEX CONCURRENTLY ON doc_chunks_2025_10 USING ivfflat (embedding vector_cosine_ops) WITH (lists=1);
-CREATE INDEX CONCURRENTLY ON doc_chunks_2025_10 USING gin (chunk_text gin_bigm_ops);
-CREATE INDEX CONCURRENTLY ON doc_chunks_2025_10 (project);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS doc_chunks_2025_10_embedding_idx ON doc_chunks_2025_10 USING ivfflat (embedding vector_cosine_ops) WITH (lists=1);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS doc_chunks_2025_10_chunk_text_idx ON doc_chunks_2025_10 USING gin (chunk_text gin_bigm_ops);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS doc_chunks_2025_10_project_idx ON doc_chunks_2025_10 (project);
 
 -- 2025-11
-CREATE INDEX CONCURRENTLY ON doc_chunks_2025_11 USING ivfflat (embedding vector_cosine_ops) WITH (lists=1);
-CREATE INDEX CONCURRENTLY ON doc_chunks_2025_11 USING gin (chunk_text gin_bigm_ops);
-CREATE INDEX CONCURRENTLY ON doc_chunks_2025_11 (project);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS doc_chunks_2025_11_embedding_idx ON doc_chunks_2025_11 USING ivfflat (embedding vector_cosine_ops) WITH (lists=1);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS doc_chunks_2025_11_chunk_text_idx ON doc_chunks_2025_11 USING gin (chunk_text gin_bigm_ops);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS doc_chunks_2025_11_project_idx ON doc_chunks_2025_11 (project);
 
 -- 2025-12
-CREATE INDEX CONCURRENTLY ON doc_chunks_2025_12 USING ivfflat (embedding vector_cosine_ops) WITH (lists=1);
-CREATE INDEX CONCURRENTLY ON doc_chunks_2025_12 USING gin (chunk_text gin_bigm_ops);
-CREATE INDEX CONCURRENTLY ON doc_chunks_2025_12 (project);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS doc_chunks_2025_12_embedding_idx ON doc_chunks_2025_12 USING ivfflat (embedding vector_cosine_ops) WITH (lists=1);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS doc_chunks_2025_12_chunk_text_idx ON doc_chunks_2025_12 USING gin (chunk_text gin_bigm_ops);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS doc_chunks_2025_12_project_idx ON doc_chunks_2025_12 (project);
 
 -- 2026-01
-CREATE INDEX CONCURRENTLY ON doc_chunks_2026_01 USING ivfflat (embedding vector_cosine_ops) WITH (lists=1);
-CREATE INDEX CONCURRENTLY ON doc_chunks_2026_01 USING gin (chunk_text gin_bigm_ops);
-CREATE INDEX CONCURRENTLY ON doc_chunks_2026_01 (project);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS doc_chunks_2026_01_embedding_idx ON doc_chunks_2026_01 USING ivfflat (embedding vector_cosine_ops) WITH (lists=1);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS doc_chunks_2026_01_chunk_text_idx ON doc_chunks_2026_01 USING gin (chunk_text gin_bigm_ops);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS doc_chunks_2026_01_project_idx ON doc_chunks_2026_01 (project);
 
 -- 2026-02
-CREATE INDEX CONCURRENTLY ON doc_chunks_2026_02 USING ivfflat (embedding vector_cosine_ops) WITH (lists=1);
-CREATE INDEX CONCURRENTLY ON doc_chunks_2026_02 USING gin (chunk_text gin_bigm_ops);
-CREATE INDEX CONCURRENTLY ON doc_chunks_2026_02 (project);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS doc_chunks_2026_02_embedding_idx ON doc_chunks_2026_02 USING ivfflat (embedding vector_cosine_ops) WITH (lists=1);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS doc_chunks_2026_02_chunk_text_idx ON doc_chunks_2026_02 USING gin (chunk_text gin_bigm_ops);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS doc_chunks_2026_02_project_idx ON doc_chunks_2026_02 (project);
 
 -- 2026-03
-CREATE INDEX CONCURRENTLY ON doc_chunks_2026_03 USING ivfflat (embedding vector_cosine_ops) WITH (lists=1);
-CREATE INDEX CONCURRENTLY ON doc_chunks_2026_03 USING gin (chunk_text gin_bigm_ops);
-CREATE INDEX CONCURRENTLY ON doc_chunks_2026_03 (project);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS doc_chunks_2026_03_embedding_idx ON doc_chunks_2026_03 USING ivfflat (embedding vector_cosine_ops) WITH (lists=1);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS doc_chunks_2026_03_chunk_text_idx ON doc_chunks_2026_03 USING gin (chunk_text gin_bigm_ops);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS doc_chunks_2026_03_project_idx ON doc_chunks_2026_03 (project);
 
 -- 2026-04
-CREATE INDEX CONCURRENTLY ON doc_chunks_2026_04 USING ivfflat (embedding vector_cosine_ops) WITH (lists=1);
-CREATE INDEX CONCURRENTLY ON doc_chunks_2026_04 USING gin (chunk_text gin_bigm_ops);
-CREATE INDEX CONCURRENTLY ON doc_chunks_2026_04 (project);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS doc_chunks_2026_04_embedding_idx ON doc_chunks_2026_04 USING ivfflat (embedding vector_cosine_ops) WITH (lists=1);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS doc_chunks_2026_04_chunk_text_idx ON doc_chunks_2026_04 USING gin (chunk_text gin_bigm_ops);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS doc_chunks_2026_04_project_idx ON doc_chunks_2026_04 (project);
 
 -- 2026-05
-CREATE INDEX CONCURRENTLY ON doc_chunks_2026_05 USING ivfflat (embedding vector_cosine_ops) WITH (lists=1);
-CREATE INDEX CONCURRENTLY ON doc_chunks_2026_05 USING gin (chunk_text gin_bigm_ops);
-CREATE INDEX CONCURRENTLY ON doc_chunks_2026_05 (project);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS doc_chunks_2026_05_embedding_idx ON doc_chunks_2026_05 USING ivfflat (embedding vector_cosine_ops) WITH (lists=1);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS doc_chunks_2026_05_chunk_text_idx ON doc_chunks_2026_05 USING gin (chunk_text gin_bigm_ops);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS doc_chunks_2026_05_project_idx ON doc_chunks_2026_05 (project);
 
 -- 2026-06 (init.sql에 이미 파티션 정의된 현재 월)
-CREATE INDEX CONCURRENTLY ON doc_chunks_2026_06 USING ivfflat (embedding vector_cosine_ops) WITH (lists=1);
-CREATE INDEX CONCURRENTLY ON doc_chunks_2026_06 USING gin (chunk_text gin_bigm_ops);
-CREATE INDEX CONCURRENTLY ON doc_chunks_2026_06 (project);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS doc_chunks_2026_06_embedding_idx ON doc_chunks_2026_06 USING ivfflat (embedding vector_cosine_ops) WITH (lists=1);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS doc_chunks_2026_06_chunk_text_idx ON doc_chunks_2026_06 USING gin (chunk_text gin_bigm_ops);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS doc_chunks_2026_06_project_idx ON doc_chunks_2026_06 (project);
 
 -- DEFAULT 파티션
-CREATE INDEX CONCURRENTLY ON doc_chunks_default USING ivfflat (embedding vector_cosine_ops) WITH (lists=1);
-CREATE INDEX CONCURRENTLY ON doc_chunks_default USING gin (chunk_text gin_bigm_ops);
-CREATE INDEX CONCURRENTLY ON doc_chunks_default (project);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS doc_chunks_default_embedding_idx ON doc_chunks_default USING ivfflat (embedding vector_cosine_ops) WITH (lists=1);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS doc_chunks_default_chunk_text_idx ON doc_chunks_default USING gin (chunk_text gin_bigm_ops);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS doc_chunks_default_project_idx ON doc_chunks_default (project);
