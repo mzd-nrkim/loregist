@@ -81,6 +81,24 @@ LOREGIST_AUTO_GUARD=1 loregist embed --file <경로>
 > **순환 가드**: `LOREGIST_AUTO_GUARD=1` 환경변수 + `--file` 개별 경로 지정 방식이므로,
 > embed 완료 후 drift 감지 → wiki-update 재기동이 발생하지 않는다(무한 재귀 차단됨).
 
+### 4단계: 커밋 처리
+
+embed 완료 후 변경 사항에 대한 커밋을 처리한다. 1단계(handbook)·2단계(catalog)에서 변경된 파일 전체를 대상으로 한다.
+
+- `loregist project list --json`에서 현재 프로젝트의 `auto_commit` 값을 읽는다.
+- `auto_commit: true` → 다음 커밋 명령을 자동 실행한다:
+  ```bash
+  git add {변경된_파일_전체} {docs_root}/_wiki/.last_handbook_update
+  git commit -m "docs: wiki update [$(date +%Y-%m-%d)]"
+  ```
+- `auto_commit: false` (또는 미설정, 기본값 false) + 변경 파일 1건 이상:
+  다음 제안 문구를 출력하고 사용자 승인을 기다린다:
+  > 변경된 파일이 {N}개 있습니다. 커밋할까요? (projects.toml auto_commit: true 로 자동화 가능)
+  - 승인 시 위 커밋 명령을 실행한다.
+  - 거절 시 커밋 없이 종료한다.
+- 변경 파일 0건 → 커밋/제안 없이 종료한다.
+- `--dry-run` 이면 커밋 처리 전체 스킵.
+
 ## 인자
 
 | 인자 | 설명 |

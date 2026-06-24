@@ -1,171 +1,184 @@
 # loregist
 
-> 업무 기록을 시맨틱 검색 가능한 개인 지식 베이스로 쌓고, 질문할 때 관련 있는 청크만 골라 LLM 컨텍스트에 주입하는 도구.
+> 업무 메모를 쌓아두고, 필요할 때 의미가 비슷한 기록까지 찾아주는 개인용 검색 도구.
 
-LLM과 길게 작업하다 보면 과거 이력을 찾으려 repo 전체를 Grep/Glob으로 훑게 되고, 컨텍스트는 노이즈로 채워진다. loregist는 업무를 텍스트 로그로 흘려보내 벡터 DB에 색인하고, 쿼리와 관련성 높은 상위 k개 청크만 꺼내 쓰게 한다. **무차별 탐색 대신 검색 랭킹으로 컨텍스트 우선순위를 매기는** 중앙 인프라다.
+예전 결정이나 회의 결론을 다시 찾으려고 파일을 뒤진 적이 있다면, loregist가 그 일을 대신합니다.
+
+한 줄씩 기록해 두면 나중에 검색으로 관련 기록을 불러올 수 있습니다. AI(클로드)와 함께 쓰면 AI가 이 기록을 검색해 참고합니다.
 
 ---
 
-## 원리
+## 어쩌다 만들어졌나
 
-한 장으로 보는 데이터 흐름 — 업무가 로그로 들어와 검색·소비되고, 오래되면 vault로 빠진다:
-
-```mermaid
-flowchart LR
-    WORK[업무] -->|기록| LOG["*.log"]
-    LOG -->|embed| DB[("pgvector")]
-    DB -->|"search top-k"| LLM[LLM 컨텍스트]
-    LOG -.->|"rotate 7일"| VAULT[vault]
-    VAULT -.->|embed| DB
-```
-
-> 단계별 구현·전체 파이프라인은 [ARCHITECTURE.md › 데이터 플로우](ARCHITECTURE.md#데이터-플로우-전체) 참조.
-
-<!-- LOCK:START -->
-<!-- 아래 블록은 수동 유지 영역입니다 (handbook-update 자동 갱신 제외) -->
-
-### 저장 계층 ↔ 저장위치 한눈에
-
-작업데이터의 네 계층(Hot · Cold · vault · Wiki)이 어디에 저장되고 어떻게 접근하는지:
+처음부터 도구를 만들려던 건 아닙니다. 일하면서 생긴 불편을 하나씩 해결하다 보니 지금 모습이 됐습니다.
 
 ```mermaid
 flowchart TB
-    subgraph REPO["📂 repo 안 (파일시스템)"]
-        HOT["🔥 Hot"]
-        WIKI["🧠 Wiki"]
-    end
-    subgraph OUTREPO["💾 repo 밖 (파일시스템)"]
-        VAULT["🗄️ vault"]
-    end
-    DB[("❄️ Cold")]
-
-    HOT -->|"rotate(7일)"| VAULT
-    HOT -->|embed| DB
-    VAULT -->|embed| DB
-    HOT -->|"wiki-update"| WIKI
+    A["모든 일을<br/>메모로 기록"] -->|"예전 기록을 매번 다시 읽기 번거로움"| B["기록을 읽고 다음 할 일<br/>정리하는 일을 자동화"]
+    B -->|"메모가 너무 많아 찾기 어려움"| C["핵심 정리본 +<br/>의미 기반 검색 도입"]
+    C -->|"오래된 메모는 계속 쌓임"| D["오래된 건 보관소로,<br/>원본은 보존"]
 ```
 
-| 계층 | 저장 위치 | 접근 방식 |
-|---|---|---|
-| 🔥 **Hot** | `docs/dev/{오늘}/` (repo 안) | LLM 직접 읽기 |
-| ❄️ **Cold** | pgvector `doc_chunks` | `loregist search` 시맨틱 검색 |
-| 🗄️ **vault** | `logvault/{project}/` (repo 밖) | rotate로 이동 · 수동 복원 |
-| 🧠 **Wiki** | `{docs_root}/_wiki/` | 직접 읽기 · `wiki-update` 갱신 |
+- 모든 일을 메모로 남기며 일했습니다.
+- 다음 할 일을 파악하려 예전 기록을 매번 다시 읽는 게 번거로웠습니다. → 기록을 읽고 다음 작업을 정리하는 일을 자동화했습니다.
+- 기록이 쌓이자 양이 너무 많아 원하는 내용을 찾기 어려웠습니다. → 핵심만 추린 정리본을 따로 두고, 단어가 아니라 의미로 찾는 검색을 도입했습니다.
+- 오래된 메모는 계속 늘어납니다. → 오래된 건 보관소로 옮기되 원본은 남겨, 검색으로 언제든 다시 불러옵니다.
 
-- **Cold와 vault는 같은 데이터의 두 얼굴이다** — vault는 rotate된 원본 파일, Cold는 그것을 embed한 검색 인덱스.
-- **Wiki 파일 형식** — `T-NNN.md`(topic) · `D-NNN.md`(decision). `wiki-update`가 로그에서 자동 증류해 생성·갱신한다.
+이 과정이 지금의 **기록 → 정리·보관 → 검색** 흐름이 됐습니다.
 
-<!-- LOCK:END -->
+---
 
-### 1. 모든 업무를 텍스트 로그로 흘려보낸다
+## 어떻게 동작하나
 
-embed된 것만 검색되므로, 검색의 출발점은 기록이다. 회의 결정·해결한 문제·검토한 문서를 `*.log` 텍스트로 남기면 LLM이 청크 단위로 소비·생산할 수 있다. 기록되지 않은 업무는 검색 대상이 아니다.
-
-### 2. 기록을 "온도"로 계층화한다
-
-모든 기록을 항상 컨텍스트에 넣으면 윈도우가 금방 찬다. loregist는 접근 방식을 온도로 나눈다.
-
-- **Hot** — 오늘 작업문서. LLM이 직접 읽는다.
-- **Cold** — 시간이 지나 vault로 이동(rotate)된 기록. 검색으로만 닿는다. repo **밖**으로 빠지므로 파일시스템을 탐색해도 과거 이력에 걸리지 않는다 (`.gitignore`는 내용을 못 막고 CLAUDE.md 규칙은 soft boundary라, 물리적 이동만이 구조적 보장이 된다).
-- **vault** — 원본 보관소. 전문(`doc_originals.full_text`)이 남아 삭제 후에도 복원 가능.
-
-### 3. 질문할 때 관련 청크만 주입한다
-
-쿼리를 임베딩해 코사인 유사도 top-k 청크만 반환한다. 전체 기록을 넘기지 않으므로 신호 대 노이즈 비가 높아지고 토큰 예산이 절약된다. 기본 검색 모드는 **hybrid**(벡터 + 키워드 RRF 융합)로, 골든셋 정확도 80% — 단독 모드(40~60%)보다 높다.
-
-### 4. 누적된 지식은 LLM이 직접 증류한다
-
-원시 로그가 검색의 한쪽 끝이라면, 반대쪽 끝은 정제된 지식이다. `wiki-update` 스킬이 텍스트 흐름에서 topic·decision을 뽑아 `_wiki/` 위키로 유지한다. 다량의 원시 기록은 검색 랭킹에, 소수의 정제 지식은 LLM 위키에 — 둘은 경쟁이 아니라 **파이프라인의 두 끝**이다.
+큰 흐름은 세 단계입니다.
 
 ```mermaid
-graph LR
-    A["📝 텍스트 로그\n모든 업무 → *.log"] -->|journal/watch| B["🔍 시맨틱 검색\nHot→Cold→vault"]
-    B -->|loregist search\ntop-k 주입| C["🧠 LLM Wiki\ntopic·decision 증류"]
-    C -->|wiki-update| A
+flowchart LR
+    A["① 한 줄로<br/>기록"] --> B["② 정리·보관<br/>(오래된 건 보관소로)"]
+    B --> C["③ 검색<br/>(의미가 비슷한 기록)"]
+```
+
+### ① 기록 — 한 줄 남기면 됩니다
+
+회의 결정, 해결한 문제, 검토한 내용을 한 줄씩 적어 둡니다. 형식이나 저장 위치는 신경 쓰지 않아도 됩니다. 단, **기록하지 않은 일은 나중에 찾을 수 없으니** 기억하고 싶은 건 가볍게라도 남겨 두는 게 좋습니다.
+
+### ② 정리·보관 — 오래된 건 보관소로
+
+모든 메모를 늘 앞에 두면 금세 어수선해집니다. loregist는 최근 기록은 가까이 두고, 오래된 기록은 보관소로 옮깁니다. 보관소로 가도 사라지지 않습니다 — 검색하면 그대로 나오고, 원본도 남습니다.
+
+```mermaid
+flowchart LR
+    NEW["최근 기록<br/>바로 꺼내 봄"] -->|"시간이 지나면"| OLD["오래된 기록<br/>보관소에 저장<br/>(검색으로 불러옴)"]
+```
+
+### ③ 검색 — 의미가 비슷한 기록을 찾습니다
+
+찾고 싶은 내용을 검색하면, 단어가 똑같지 않아도 **의미가 비슷한** 기록을 관련도 순으로 보여줍니다. (예: "배포 실패"로 검색해도 "deploy 에러" 기록이 잡힙니다.)
+
+AI(클로드)와 함께 쓸 때 특히 유용합니다. AI가 기록 전체를 읽는 대신 검색으로 추려진 관련 기록만 참고하므로, 답이 더 정확하고 토큰도 아낍니다.
+
+```mermaid
+flowchart LR
+    Q["질문 / 검색어"] --> S["loregist가<br/>관련 기록 선별"]
+    S --> AI["AI가 그걸 참고해<br/>답변"]
 ```
 
 ---
 
-## 유사 개념
+## 기록이 쌓이면 — 자동화로 이어집니다
 
-loregist를 이미 아는 개념으로 위치 짓는다면:
+기록은 그 자체로 끝이 아닙니다. 검색 가능한 기록이 쌓이면, 반복 업무를 대신해 주는 **스킬**(Claude Code에서 동작)이 그 기록을 활용합니다. 스킬은 당신의 기록을 검색해 참고하므로, **기록이 없으면 스킬도 참고할 내용이 없습니다.** 기록과 스킬은 따로 노는 기능이 아니라 하나의 흐름입니다.
 
-| 개념 | loregist에서의 대응 |
-|---|---|
-| **RAG** (Retrieval-Augmented Generation) | 핵심 패턴 그 자체. 단, 외부 문서가 아니라 **자기 업무 로그**를 검색 코퍼스로 삼는 개인용 RAG. |
-| **벡터 DB / 시맨틱 검색** | pgvector + 한국어 특화 임베딩 모델. 키워드가 아닌 의미로 과거 이력을 소환. |
-| **LLM 장기 기억 (long-term memory)** | 세션을 넘어 누적되는 외부 기억 계층. 컨텍스트 윈도우 밖의 이력을 검색으로 되살린다. |
-| **메모리 계층 / 캐시 (hot/cold tiering)** | 자주 쓰는 데이터는 가깝게(Hot=직접 읽기), 오래된 데이터는 멀리(Cold=검색)·아카이브(vault). OS의 캐시 계층과 같은 발상. |
-| **지식 베이스 / 위키** | `_wiki/`의 topic·decision 인덱스. 단, 사람이 아니라 LLM이 로그에서 증류해 유지. |
-
-요약하면 loregist는 **개인 업무 로그 위의 RAG + hot/cold 메모리 계층 + LLM이 유지하는 위키**의 결합이다.
-
----
-
-## 지원 도구
-
-### 기록 — 로그를 쌓는 입구
-
-| 도구 | 역할 |
-|---|---|
-| `loregist journal "메시지"` | 오늘 날짜 `.log`에 타임스탬프와 함께 append |
-| `loregist watch` | 디렉터리 감시 — 파일 변경 시 자동 embed |
-| `github-digest.sh` / `jira-digest.sh` | GitHub 알림·Jira 업데이트를 `.log`로 변환해 append ([`scripts/examples/`](scripts/examples/)) |
-| 직접 작성 | `logvault/{project}/YYYY-MM-DD.log` 형식으로 자유 기록 |
-| macOS Shortcuts / launchd | 터미널 없이 단축키로 기록, 1시간마다 자동 embed (USAGE 참조) |
-
-### 검색·색인 — CLI
-
-```bash
-loregist embed                  # 현재 프로젝트 임베딩 (--incremental: 변경분만)
-loregist search "쿼리"          # hybrid 시맨틱 검색 (--mode fts / --all-projects / --json)
-loregist rotate                 # Hot → vault 이동 (라이프사이클, 7일 초과분)
-loregist rotate --extensions md,log,txt  # 확장자 런타임 override (기본: projects.toml extensions)
-loregist project list           # 등록 프로젝트 목록
-loregist catalog --project {p}  # _wiki/ topic·decision 인덱스 갱신
+```mermaid
+flowchart LR
+    LOG["쌓인 기록"] -->|"검색으로 관련 내용 선별"| SKILL["스킬"]
+    SKILL --> OUT["데일리 보고 초안<br/>못 끝낸 일 이월<br/>다음 할 일 제안"]
 ```
 
-전체 명령·옵션은 [USAGE.md](docs/public/USAGE.md) 참조.
+### 문서 작성 도우미로도 씁니다
 
-### 소비 — Claude Code 스킬
+로그나 메모를 던지면 스킬이 그것을 구조화된 문서로 바꾸고, 다음 할 일까지 제안합니다. README나 아키텍처 문서를 코드 변경에 맞춰 자동으로 갱신하거나, 누적된 문서에서 핵심 결정과 주제를 뽑아 지식 베이스를 만들기도 합니다.
 
-로그가 쌓이고 embed되면, 스킬이 `loregist search`로 관련 컨텍스트를 주입해 반복 작업을 자동화한다.
+```mermaid
+flowchart LR
+    RAW["원시 텍스트<br/>*.log · *.md · *.txt"]
+    DOC["구조화 문서<br/>작업문서·주제별 문서"]
+
+    RAW -->|"process-history<br/>add-work"| DOC
+    DOC -->|"daily-report"| REPORT["슬랙 보고"]
+    DOC -->|"carry-over"| CARRY["내일 이월 목록"]
+    DOC -->|"handbook-update"| HB["README·ARCHITECTURE<br/>자동 갱신"]
+    DOC -->|"catalog-update"| WIKI["_wiki/<br/>topic·decision 색인"]
+    HB -->|"wiki-update"| WIKI
+```
+
+### 스킬 목록
+
+**일별 흐름**
 
 | 스킬 | 역할 |
 |---|---|
+| `process-history` | 로그 파일 → 주제별 문서 기입 + 다음 할 일 제안 |
 | `add-work` | 오늘 작업문서에 업무 항목 등록 |
-| `carry-over` | 전일 미완 항목을 오늘로 이월 |
-| `daily-report` | 작업문서 + Jira/git log로 슬랙 데일리 보고 생성 |
-| `daily-rollup` | 전 프로젝트 할 일 통합 |
-| `process-history` | 히스토리 로그를 작업문서에 기입하고 다음 할 일 제안 |
-| `catalog-update` | `_wiki/` topic·decision 자동 증류·갱신 |
-| `docs-manage` / `future-plan` | 공통 문서 조회·갱신 / 미래 계획 관리 |
+| `carry-over` | 전일 미진행 항목을 오늘로 이월 |
 
-> 로그를 기록하지 않으면 스킬이 참조할 이력이 없다. **기록 → embed → 검색·스킬 활용**은 하나의 루프다.
+**보고 생성**
 
-### 멀티 프로젝트
+| 스킬 | 역할 |
+|---|---|
+| `daily-report` | 아침/저녁 슬랙 데일리 보고 생성 |
+| `daily-rollup` | 전 프로젝트 할 일 통합 목록 생성 |
 
-프로젝트 단위로 검색 스코프가 나뉜다. cwd에서 현재 프로젝트를 자동 추론하고, `--all-projects`로 크로스 검색한다. 새 프로젝트 추가는 [`projects.toml`](projects.toml)에 블록 한 개를 더하는 것으로 끝난다 — 코드 편집 불필요.
+**문서 관리**
+
+| 스킬 | 역할 |
+|---|---|
+| `docs-manage` | 방화벽·인프라·운영 정보 공통 문서 조회·갱신 |
+| `future-plan` | 미래 계획 등록·조회·데일리 승격 |
+
+**지식 증류**
+
+| 스킬 | 역할 |
+|---|---|
+| `handbook-update` | git diff 기반 README·ARCHITECTURE 등 산문 문서 자동 갱신 |
+| `catalog-update` | 문서에서 topic·decision을 `_wiki/`로 자동 증류 |
+| `wiki-update` | handbook-update → catalog-update 순 통합 갱신 오케스트레이터 |
+
+스킬 상세(인자·호출 방법)는 [docs/public/SKILLS.md](docs/public/SKILLS.md), 설계 원리는 [ARCHITECTURE.md › Claude Code 스킬](ARCHITECTURE.md#claude-code-스킬)을 참고하세요.
 
 ---
 
-## 빠른 시작
+## 시작하기
+
+> **현재 macOS에서만 사용할 수 있습니다.** 처음 한 번은 설치가 필요합니다. 터미널이 익숙하지 않다면 **[설치 안내(SETUP.md) › 비개발자 키트](docs/public/SETUP.md)**를 따르거나, 가까운 개발 동료에게 "loregist 비개발자 키트 설치"를 부탁하세요. 설치가 끝나면 아래처럼 쓸 수 있습니다.
+
+### 터미널 없이 — 더블클릭 / 단축키
+
+가장 쉬운 방법입니다.
+
+- **기록하기**: `loregist-journal` 아이콘을 더블클릭하면 입력창이 뜹니다. 한 줄 적고 확인하면 끝입니다.
+- **단축키로 기록**: macOS 단축키(예: `⌥Space`)로 어디서든 바로 입력할 수 있습니다.
+
+설정 방법은 [사용 가이드(USAGE.md) › macOS 자동화](docs/public/USAGE.md)를 참고하세요.
+
+### 명령어로 — 익숙하다면
 
 ```bash
-make setup                      # 의존성 설치 + pgvector 기동
-loregist warmup                 # 임베딩 모델 다운로드 (최초 1회, ~450MB)
-loregist project add            # 대화형 프로젝트 등록
-loregist journal "오늘 한 일"   # 기록 (자동 embed)
-loregist search "검색어"        # 시맨틱 검색
+loregist journal "API 스펙 검토 완료, v2 엔드포인트 유지 결정"   # 기록
+loregist search "엔드포인트 결정"                              # 검색
 ```
 
-설치·환경변수·자동화 상세는 [USAGE.md](docs/public/USAGE.md) 참조.
+기록은 자동으로 쌓이고, 검색하면 관련 기록이 관련도 순으로 나옵니다.
+
+---
+
+## 자주 묻는 것
+
+- **기록한 내용이 사라지나요?** — 사라지지 않습니다. 오래된 기록은 보관소로 옮겨질 뿐, 검색하면 다시 나오고 원본도 남습니다.
+- **정해진 형식이 있나요?** — 없습니다. 평소 말하듯 한 줄 적으면 됩니다.
+- **검색어가 정확해야 하나요?** — 아닙니다. 의미가 비슷하면 단어가 달라도 찾습니다. 단, 전부 빠짐없이가 아니라 관련도가 높은 것부터 보여줍니다.
+- **다른 사람과 공유되나요?** — 아닙니다. 개인용이며, 프로젝트별로 따로 관리됩니다.
+
+---
+
+## 개념적으로는 (관심 있다면)
+
+AI 도구 용어에 익숙하다면, loregist는 이렇게 위치 지을 수 있습니다.
+
+- 내 업무 기록을 자료로 삼아 관련 내용을 찾아 AI에 넣는 **개인용 RAG**(검색 기반 AI 활용)
+- 단어가 아니라 의미로 찾는 **시맨틱(벡터) 검색**
+- 세션을 넘어 쌓이는 AI의 **장기 기억**
+
+이 비유를 더 풀어 쓴 대응표는 [ARCHITECTURE.md › 유사 개념](ARCHITECTURE.md#유사-개념)에 있습니다. (용어가 낯설면 건너뛰어도 됩니다.)
 
 ---
 
 ## 더 알아보기
 
-- [docs/public/SETUP.md](docs/public/SETUP.md) — 설치 단계별 안내 (클론 → 훅 → PATH → DB → 프로젝트 등록 → 비개발자 키트)
-- [ARCHITECTURE.md](ARCHITECTURE.md) — 스택·컴포넌트·라이프사이클·DB 스키마 등 기술 상세
-- [docs/public/USAGE.md](docs/public/USAGE.md) — 설치·명령어·연동·운영
-- [docs/public/log-format.md](docs/public/log-format.md) — 로그 형식·청킹 규칙
+기술적인 동작 원리나 전체 명령어가 궁금하다면(개발자용):
+
+- [docs/public/SETUP.md](docs/public/SETUP.md) — 설치 단계별 안내 (비개발자 키트 포함)
+- [docs/public/USAGE.md](docs/public/USAGE.md) — 전체 명령어·옵션·자동화·연동
+- [docs/public/SKILLS.md](docs/public/SKILLS.md) — 스킬 목록·인자·호출 방법
+- [ARCHITECTURE.md](ARCHITECTURE.md) — 설계 원리·구조·기술 상세
+- [docs/public/log-format.md](docs/public/log-format.md) — 로그 형식·기록 규칙

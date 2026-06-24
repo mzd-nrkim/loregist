@@ -4,15 +4,29 @@
 
 ---
 
+## 비개발자 퀵스타트
+
+```bash
+git clone <repo-url> loregist
+cd loregist
+bash scripts/install-nondev-kit.sh
+```
+
+위 두 단계(클론 → 설치 스크립트 실행)로 macOS 자동화 도구 설치까지 완료된다.  
+이후 사용법은 아래 [비개발자 키트 이후 단계](#비개발자-키트-이후-단계)를 참조.
+
+---
+
 ## Prerequisites
 
+- **지원 환경: 현재 macOS만 지원한다.** 자동화·설치 스크립트(`make install`, 비개발자 키트의 Shortcuts·launchd 등)가 macOS 기준으로 작성·검증되어 있다. 다른 OS는 아직 지원하지 않는다.
 - Python 3.11
 - Docker (pgvector 컨테이너)
 - `make`
 
 ---
 
-## 설치 절차
+## 개발자·고급 설정 (상세)
 
 ### 1. 저장소 클론
 
@@ -53,6 +67,35 @@ make install
 ```
 
 > 개발자가 아닌 경우에도 이 단계가 필요하다. `loregist` 명령을 터미널 어디서나 실행하려면 PATH 등록이 전제되어야 한다.
+
+---
+
+### 3-a. LOREGIST_WORKSPACE 설정
+
+`LOREGIST_WORKSPACE`는 loregist가 기록·검색 대상으로 삼을 워크스페이스 루트 경로를 가리키는 환경변수다. 미설정 시 기본값이 사용되지만, 명시 설정을 권장한다.
+
+**방법 1 — 셸 프로파일 (`.zshrc`)**
+
+```bash
+echo 'export LOREGIST_WORKSPACE=~/workspace' >> ~/.zshrc
+source ~/.zshrc
+```
+
+`~/workspace` 부분을 실제 워크스페이스 디렉터리 경로로 바꾼다.
+
+**방법 2 — Claude Code 세션 전용 (`.claude/settings.json`)**
+
+Claude Code 세션에서만 적용하려면 프로젝트 루트의 `.claude/settings.json`에 `env` 블록을 추가한다.
+
+```json
+{
+  "env": {
+    "LOREGIST_WORKSPACE": "/absolute/path/to/workspace"
+  }
+}
+```
+
+> 두 방법을 동시에 적용하면 셸 프로파일 값이 우선한다.
 
 ---
 
@@ -105,6 +148,8 @@ loregist project list
 ---
 
 ### 8. 비개발자 키트 설치 (`scripts/install-nondev-kit.sh`)
+
+> 비개발자는 위 퀵스타트 참조. 아래는 참고용 상세 절차.
 
 코드·인프라 작업 없이 loregist를 일상 업무에 활용할 수 있도록 macOS 자동화 도구(Shortcuts 앱 단축키, launchd 자동 embed 등)를 설치한다.
 

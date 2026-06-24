@@ -295,6 +295,8 @@ def load_projects(path=PROJECTS_FILE):
             "auto_handbook_update": _parse_bool_flag(e, "auto_handbook_update", name),
             # auto_catalog_update: true 시 catalog-update 무인 자동 실행 (기본 false)
             "auto_catalog_update": _parse_bool_flag(e, "auto_catalog_update", name),
+            # auto_commit: true 시 handbook/catalog 갱신 후 자동 커밋 (기본 false)
+            "auto_commit": _parse_bool_flag(e, "auto_commit", name),
         }
     return result
 
@@ -401,6 +403,7 @@ def dump_projects(as_json: bool = True) -> str:
             "hot_days": cfg.get("hot_days", ROTATE_TO_VAULT_DAYS),
             "auto_handbook_update": cfg.get("auto_handbook_update", False),
             "auto_catalog_update": cfg.get("auto_catalog_update", False),
+            "auto_commit": cfg.get("auto_commit", False),
         })
     return _json.dumps(result, ensure_ascii=False, indent=2)
 

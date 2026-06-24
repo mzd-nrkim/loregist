@@ -25,16 +25,60 @@ warn()  { echo "[WARN]  $*" >&2; }
 skip()  { echo "[SKIP]  $*"; }
 done_() { echo "[DONE]  $*"; }
 
-# ── C-6: embed 엔진 상태 점검 ─────────────────────────────────────────────────
-check_embed_engine() {
-  info "C-6: embed 엔진(Docker 컨테이너) 상태 점검 중..."
-  if docker ps --filter name=loregist 2>/dev/null | grep -q loregist; then
-    done_ "loregist Docker 컨테이너 가동 중."
-  else
-    warn "loregist Docker 컨테이너가 가동 중이지 않습니다. embed 기능이 동작하지 않을 수 있습니다."
-    warn "컨테이너 기동: make db-up  (또는 docker compose -f infra/docker-compose.yml up -d)"
+# ── C-0: Python 가상환경 셋업 ─────────────────────────────────────────────────
+setup_venv() {
+  info "C-0: Python 가상환경 셋업 중..."
+  if [[ -d "$REPO_DIR/.venv" ]]; then
+    skip ".venv 이미 존재 ($REPO_DIR/.venv)"
+    return 0
   fi
+  info "  .venv 없음 — make setup 실행 중..."
+  make -C "$REPO_DIR" setup
+  done_ "make setup 완료"
 }
+
+# ── C-1: DB(Docker) 기동 ─────────────────────────────────────────────────────
+ensure_db_up() {
+  info "C-1: loregist DB(Docker 컨테이너) 기동 확인 중..."
+  if docker ps --filter name=loregist 2>/dev/null | grep -q loregist; then
+    skip "loregist Docker 컨테이너 이미 가동 중."
+    return 0
+  fi
+  info "  컨테이너 미기동 — make db-up 실행 중..."
+  make -C "$REPO_DIR" db-up
+  done_ "loregist DB 기동 완료"
+}
+
+# ── C-1b: 임베딩 모델 웜업 ───────────────────────────────────────────────────
+warmup_model() {
+  info "C-1b: 임베딩 모델 캐시 확인 중..."
+  # 캐시 경로: <repo>/models/models--dragonkue--multilingual-e5-small-ko-v2
+  # (src/loregist/embed.py: MODELS_DIR / ("models--" + MODEL_NAME.replace("/", "--")))
+  local model_cache="$REPO_DIR/models/models--dragonkue--multilingual-e5-small-ko-v2"
+  if [[ -d "$model_cache" ]]; then
+    skip "임베딩 모델 캐시 이미 존재 ($model_cache)"
+    return 0
+  fi
+  info "  모델 캐시 없음 — loregist warmup 실행 중 (시간 소요)..."
+  loregist warmup
+  done_ "임베딩 모델 웜업 완료"
+}
+
+# ── C-1c: loregist 프로젝트 등록 ─────────────────────────────────────────────
+ensure_project() {
+  info "C-1c: loregist 프로젝트 등록 확인 중..."
+  if loregist project list 2>/dev/null | grep -q "$PROJECT_KEY"; then
+    done_ "프로젝트 '$PROJECT_KEY' 이미 등록됨."
+    return 0
+  fi
+  info "  프로젝트 '$PROJECT_KEY' 미등록 — loregist project add 실행..."
+  info "  (대화형 입력이 시작됩니다. 프롬프트에 따라 입력하세요)"
+  loregist project add
+  done_ "프로젝트 등록 완료"
+}
+
+# ── C-6(구): embed 엔진 상태 점검 (ensure_db_up으로 대체됨) ─────────────────
+# check_embed_engine 함수는 ensure_db_up으로 격상되어 제거되었습니다.
 
 # ── C-2: loregist 바이너리 PATH 등록 / 심링크 ────────────────────────────────
 install_loregist_symlink() {
@@ -155,10 +199,19 @@ main() {
   echo "============================================================"
   echo ""
 
-  check_embed_engine
+  setup_venv
+  echo ""
+
+  ensure_db_up
   echo ""
 
   install_loregist_symlink
+  echo ""
+
+  warmup_model
+  echo ""
+
+  ensure_project
   echo ""
 
   install_launch_agent

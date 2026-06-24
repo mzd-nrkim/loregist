@@ -172,7 +172,7 @@ edges: [T-010, T-012, D-008]      # 내부 카탈로그 id 전용 (T-xxx / D-xxx
 - **`edges:` = 내부 카탈로그 id 리스트**(`T-xxx`/`D-xxx`)다. 항목 간 의미적 연관을 그래프로 잇는다.
 - **`related:` 와 구분**한다 — `related:` 는 증류 출처가 된 **소스 파일 경로**(예: `plans/done/...md`)이고, `edges:` 는 **카탈로그 내부 id**다. 둘은 의미가 달라 별도 필드로 분리돼 있다.
 - **양방향 대칭 규칙**: A의 `edges:` 에 B가 있으면 B의 `edges:` 에도 A가 있어야 한다(A→B 존재 시 B→A 필수). 비대칭은 lint `asymmetric` 위반이다(섹션 6).
-- **렌더**: `TOPICS.md`·`DECISIONS.md` 표의 **"연결" 컬럼**이 각 항목의 `edges:` 를 렌더한다. "관련 파일"(related) 컬럼과는 별개 컬럼이다.
+- **렌더**: `TOPICS.md`·`DECISIONS.md` 표의 **"연결" 컬럼**이 각 항목의 `edges:` 를 렌더한다. related 컬럼(`TOPICS.md`는 "관련 파일", `DECISIONS.md`는 "related")과는 별개 컬럼이다.
 
 ## 6. lint_edges 검사 규칙
 

@@ -6,6 +6,8 @@ __pycache__/
 .coverage
 .pytest_cache/
 htmlcov/
+# repo-validate 등 스킬이 생성하는 내부 리포트 산출물 — 발행·커밋 제외
+artifacts/
 
 # 실 config — 고객 식별자 포함, 커밋 금지 (.example 사용)
 projects.toml
