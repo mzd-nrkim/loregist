@@ -29,15 +29,20 @@ flowchart LR
 작업데이터의 네 계층(Hot · Cold · vault · Wiki)이 어디에 저장되고 어떻게 접근하는지:
 
 ```mermaid
-flowchart LR
-    WORK([업무]) --> HOT["🔥 Hot\ndocs/dev/{오늘}/"]
-    HOT -->|"rotate(7일)"| VAULT["🗄️ vault\nlogvault/"]
-    HOT -->|embed| COLD[("❄️ Cold\npgvector")]
-    VAULT -->|embed| COLD
-    HOT -->|"catalog-update 증류"| WIKI["🧠 Wiki\n_wiki/"]
-    COLD -->|"search top-k"| CTX([컨텍스트 주입])
-    HOT --> CTX
-    WIKI --> CTX
+flowchart TB
+    subgraph REPO["📂 repo 안 (파일시스템)"]
+        HOT["🔥 Hot  docs/dev/{오늘}/"]
+        WIKI["🧠 Wiki  _wiki/"]
+    end
+    subgraph OUTREPO["💾 repo 밖 (파일시스템)"]
+        VAULT["🗄️ vault  logvault/"]
+    end
+    DB[("❄️ Cold  pgvector")]
+
+    HOT -->|"rotate(7일)"| VAULT
+    HOT -->|embed| DB
+    VAULT -->|embed| DB
+    HOT -->|"catalog-update"| WIKI
 ```
 
 | 계층 | 저장 위치 | 접근 방식 |
