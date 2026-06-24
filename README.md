@@ -42,7 +42,7 @@ flowchart TB
     HOT -->|"rotate(7일)"| VAULT
     HOT -->|embed| DB
     VAULT -->|embed| DB
-    HOT -->|"catalog-update"| WIKI
+    HOT -->|"wiki-update"| WIKI
 ```
 
 | 계층 | 저장 위치 | 접근 방식 |
@@ -50,10 +50,10 @@ flowchart TB
 | 🔥 **Hot** | `docs/dev/{오늘}/` (repo 안) | LLM 직접 읽기 |
 | ❄️ **Cold** | pgvector `doc_chunks` | `loregist search` 시맨틱 검색 |
 | 🗄️ **vault** | `logvault/{project}/` (repo 밖) | rotate로 이동 · 수동 복원 |
-| 🧠 **Wiki** | `{docs_root}/_wiki/` | 직접 읽기 · `catalog-update` 갱신 |
+| 🧠 **Wiki** | `{docs_root}/_wiki/` | 직접 읽기 · `wiki-update` 갱신 |
 
 - **Cold와 vault는 같은 데이터의 두 얼굴이다** — vault는 rotate된 원본 파일, Cold는 그것을 embed한 검색 인덱스.
-- **Wiki 파일 형식** — `T-NNN.md`(topic) · `D-NNN.md`(decision). `catalog-update`가 로그에서 자동 증류해 생성·갱신한다.
+- **Wiki 파일 형식** — `T-NNN.md`(topic) · `D-NNN.md`(decision). `wiki-update`가 로그에서 자동 증류해 생성·갱신한다.
 
 <!-- LOCK:END -->
 
@@ -75,13 +75,13 @@ embed된 것만 검색되므로, 검색의 출발점은 기록이다. 회의 결
 
 ### 4. 누적된 지식은 LLM이 직접 증류한다
 
-원시 로그가 검색의 한쪽 끝이라면, 반대쪽 끝은 정제된 지식이다. `catalog-update` 스킬이 텍스트 흐름에서 topic·decision을 뽑아 `_wiki/` 위키로 유지한다. 다량의 원시 기록은 검색 랭킹에, 소수의 정제 지식은 LLM 위키에 — 둘은 경쟁이 아니라 **파이프라인의 두 끝**이다.
+원시 로그가 검색의 한쪽 끝이라면, 반대쪽 끝은 정제된 지식이다. `wiki-update` 스킬이 텍스트 흐름에서 topic·decision을 뽑아 `_wiki/` 위키로 유지한다. 다량의 원시 기록은 검색 랭킹에, 소수의 정제 지식은 LLM 위키에 — 둘은 경쟁이 아니라 **파이프라인의 두 끝**이다.
 
 ```mermaid
 graph LR
     A["📝 텍스트 로그\n모든 업무 → *.log"] -->|journal/watch| B["🔍 시맨틱 검색\nHot→Cold→vault"]
     B -->|loregist search\ntop-k 주입| C["🧠 LLM Wiki\ntopic·decision 증류"]
-    C -->|catalog-update| A
+    C -->|wiki-update| A
 ```
 
 ---
