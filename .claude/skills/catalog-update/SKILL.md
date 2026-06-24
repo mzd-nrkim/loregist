@@ -5,6 +5,10 @@ argument-hint: [--project <key>] [--all] [--now [이름]] [--force] [--recommend
 allowed-tools: Agent, Bash, Read, Write, Edit, Glob, Grep
 ---
 
+## 역할
+
+오케스트레이터: 인자를 파싱하고 `catalog-update-core` 에이전트를 호출한다.
+
 ## 프로젝트 해석
 
 1. `--project <key>` 인자가 있으면 그 프로젝트 사용
@@ -17,17 +21,7 @@ allowed-tools: Agent, Bash, Read, Write, Edit, Glob, Grep
 
 이 스킬의 모든 상대 경로는 `{docs_root}/` 기준이다.
 
-# 역할
-
-`handbook`에 등록된 파일(또는 대체 소스)을 LLM이 분석하여 `_wiki/T-xxx.md`(topic) / `_wiki/D-xxx.md`(decision) 파일을 자동 생성·갱신한다.
-
-# 트리거 키워드
-
-- `catalog-update`, `카탈로그 업데이트`, `catalog update`
-- `handbook 스캔`, `topic 추출`, `decision 추출`
-- `카탈로그 생성`, `카탈로그 갱신`
-
-# 인수 정의
+## 인수 정의
 
 | 인수 | 설명 |
 |---|---|
@@ -41,36 +35,45 @@ allowed-tools: Agent, Bash, Read, Write, Edit, Glob, Grep
 | `--commit` | 완료 후 변경된 `_wiki/*.md` 파일을 git commit |
 | `--defer-embed` | embed 단계를 스킵하고 `EMBED_FILES: <경로들>` 한 줄을 출력 — wiki-update 등 상위 오케스트레이터가 일괄 embed할 때 사용 |
 
-> 인수 조합·3축 모드 매트릭스·대표 조합·`--now`와 `--scan` 관계 세부는 `references/modes.md` 참조 — 어떤 모드로 진입할지 판단할 때 읽는다.
+## 처리 흐름
 
-# 모드 분기 (요약 흐름)
+### 1단계: 인자 파싱 + 프로젝트 추론
 
-우선순위 순으로 분기한다. 세부 규칙은 `references/modes.md` 참조 — 각 모드의 동작 규칙을 확인할 때 읽는다.
+수신된 인자를 파싱하고 위 프로젝트 해석 규칙에 따라 `docs_root`와 프로젝트 key를 추론한다.
 
-1. `--recommend-sources` → **B-2** 실행 후 종료
-2. `--all` → **B-3-all** 전 프로젝트 순회 (각 프로젝트에 3~5 적용)
-3. `--now [이름]` → **B-1c** base 무시 전체 스캔 (`[이름]` 지정 시 필터)
-4. `--scan` → **B-1b** 코드·문서 직접 스캔 (cold start·drift 감지)
-5. 인자 없음 → **B-1a** 컨텍스트 기반 모드
+### 2단계: Agent 도구로 `catalog-update-core` 호출
 
-`--force`는 독립 축 — 3~5 어느 모드와도 조합 가능.
+Agent 도구를 사용해 `catalog-update-core` 에이전트를 호출한다. 호출 프롬프트에는 다음을 포함한다:
 
-스캔 후 공통 처리 흐름: **B-3a(handbook 스키마) → B-3(소스 결정) → B-4(LLM 분석) → B-5(중복 검사) → B-6(ID 부여) → B-7(파일 작성) → B-8(완료 처리)**
+- 추론된 `docs_root` 경로
+- 추론된 프로젝트 key
+- 전달된 인자 전체: `--project`, `--all`, `--now [이름]`, `--force`, `--recommend-sources`, `--dry-run`, `--scan`, `--commit`, `--defer-embed`
+- `--all` 인자가 있으면 전체 프로젝트 목록과 각 `docs_root`도 함께 전달
 
-> 각 단계 세부 절차는 `references/processing.md` 참조 — 각 B-N 단계를 실행하기 직전에 읽는다.
+### 3단계: 에이전트 완료 후 처리
 
-> 출력 형식·`--all` 집계·연계 흐름 순서 예시는 `references/output.md` 참조 — 결과를 출력하거나 다른 스킬과 연계할 때 읽는다.
+에이전트 출력에서 다음을 파싱한다:
 
-# 제약 조건
+1. **`EDITED_FILES:` 줄 파싱** — 변경된 파일 목록 확인
+2. **`git diff --stat` 출력** — dirty 상태 확인 (변경 사항 요약 표시)
+3. **`COMMIT_REQUESTED` 신호 처리** — 신호가 있으면 다음 커밋 명령을 실행한다:
 
-1. **기존 `_wiki/*.md` 파일 본문 덮어쓰기:**
-   - `--force` 미지정: 본문 불변 — `related:` 업데이트만 허용 (기존 동작 유지)
-   - `--force` 지정: B-5-force 보호 장치(status:edited 제외, LOCK 마커 보존, frontmatter 보존, 항목별 승인) 하 본문 재작성 허용
-2. `--dry-run` 시 파일 Write 금지 — 출력만 (`--force`와 조합 시에도 동일)
-3. `_wiki/` 디렉토리 내 파일은 recommend-sources 후보에서 제외
-4. 중복 판정(유사도 > 0.85)된 항목은 신규 파일 생성하지 않음
-5. ID 패딩은 항상 3자리 유지
-6. handbook이 있으면 반드시 1순위만 사용 — 대체 소스와 혼합 금지
-7. `projects.toml` 편집은 `--recommend-sources` 모드에서만 수행
-8. **handbook 파일 수정 금지** — 이 스킬은 모든 handbook 항목을 읽기 전용으로만 사용한다. handbook 파일 갱신은 `/wiki-update` 스킬에서 수행한다
-9. `--all` 순회 시 `_wiki/` 없는 프로젝트는 건너뛰고 집계에 표시한다
+   ```bash
+   git -C {docs_root} add _wiki/ _wiki/.last_catalog_update
+   git -C {docs_root} commit -m "catalog-update: {N}개 항목 생성/갱신 [$(date +%Y-%m-%d)]"
+   ```
+
+   `--all` 다중 repo 시에는 `references/output.md`의 repo 그룹핑 커밋 절차를 따른다.
+
+4. **embed 처리**:
+   - `--defer-embed` 없고 `EDITED_FILES`에 파일이 있으면:
+     ```bash
+     LOREGIST_AUTO_GUARD=1 loregist embed --file <경로1> --file <경로2> …
+     ```
+   - `--defer-embed` 있으면 에이전트가 출력한 `EMBED_FILES:` 줄을 그대로 출력한다.
+
+# 트리거 키워드
+
+- `catalog-update`, `카탈로그 업데이트`, `catalog update`
+- `handbook 스캔`, `topic 추출`, `decision 추출`
+- `카탈로그 생성`, `카탈로그 갱신`

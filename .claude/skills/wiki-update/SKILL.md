@@ -11,10 +11,10 @@ allowed-tools: Agent, Bash, Read, Glob
 
 - **handbook**: 사람이 권위를 갖는 수동편집 가능 종합 문서 (README.md, ARCHITECTURE.md 등)
 - **catalog**: handbook을 소스로 LLM이 자동 증류한 topic·decision 색인 (_wiki/)
-- **wiki-update**: handbook을 먼저 갱신하고(handbook-update), 그 결과를 catalog에 반영(catalog-update)하는 순서를 보장한다.
+- **wiki-update**: handbook을 먼저 갱신하고(handbook-update-core), 그 결과를 catalog에 반영(catalog-update-core)하는 순서를 보장한다.
 
 ```
-wiki-update ⊃ { handbook-update → catalog-update }
+wiki-update ⊃ { handbook-update-core → catalog-update-core }
               (증류 방향 = handbook 먼저, catalog 나중)
 ```
 
@@ -26,36 +26,49 @@ wiki-update ⊃ { handbook-update → catalog-update }
 
 ## 처리 순서
 
-### 1단계: handbook-update 호출
+### 1단계: handbook-update-core 에이전트 호출
 
-`/handbook-update [--project <key>] [--dry-run] --defer-embed` 를 수행한다.
+Agent 도구로 `handbook-update-core` 에이전트를 직접 호출한다.
 
-- `--all` 이면 전 프로젝트 순회 (handbook-update에 `--all` 전파)
-- `--dry-run` 이면 실제 파일 수정 없이 변경 예정 내용만 출력 (하위 스킬에 전파)
-- `--project <key>` 를 명시한 경우 하위 스킬에 그대로 전파
-- `--defer-embed` 를 전달해 handbook-update 내부의 개별 embed를 스킵하게 한다.
-  handbook-update는 갱신한 파일 목록을 `EMBED_FILES: <공백구분 경로>` 한 줄로 출력한다.
+호출 프롬프트에 포함할 내용:
+- 추론된 `docs_root` 경로
+- 추론된 프로젝트 key (또는 `--all` 모드 시 전체 프로젝트 목록)
+- `--all` 인자 (해당 시 전파)
+- `--dry-run` 인자 (해당 시 전파 — 실제 파일 수정 없이 변경 예정 내용만 출력)
+- `--project <key>` 인자 (명시된 경우 전파)
+- `--defer-embed` 를 반드시 전달 — handbook-update-core 내부의 개별 embed를 스킵하게 한다.
+  에이전트는 갱신한 파일 목록을 `EMBED_FILES: <공백구분 경로>` 한 줄로 출력한다.
 
-### 2단계: catalog-update 호출
+1단계 완료 후 에이전트 출력에서 `EMBED_FILES:` 줄을 파싱해 경로를 수집한다.
 
-handbook-update 완료 후 `/catalog-update [--project <key>] [--dry-run] --defer-embed` 를 수행한다.
+### 2단계: catalog-update-core 에이전트 호출
 
-- handbook-update가 변경을 만들었거나 `--dry-run`이 아닌 경우에 실행
+handbook-update-core 완료 후 Agent 도구로 `catalog-update-core` 에이전트를 직접 호출한다.
+
+- handbook-update-core가 변경을 만들었거나 `--dry-run`이 아닌 경우에 실행
 - `--dry-run` 이면 catalog도 dry-run으로 전파 (실제 _wiki/ 파일 미수정)
-- `--project <key>` 를 명시한 경우 하위 스킬에 그대로 전파
-- `--defer-embed` 를 전달해 catalog-update 내부의 개별 embed를 스킵하게 한다.
-  catalog-update는 갱신한 파일 목록을 `EMBED_FILES: <공백구분 경로>` 한 줄로 출력한다.
+
+호출 프롬프트에 포함할 내용:
+- 추론된 `docs_root` 경로
+- 추론된 프로젝트 key (또는 `--all` 모드 시 전체 프로젝트 목록)
+- `--all` 인자 (해당 시 전파)
+- `--dry-run` 인자 (해당 시 전파)
+- `--project <key>` 인자 (명시된 경우 전파)
+- `--defer-embed` 를 반드시 전달 — catalog-update-core 내부의 개별 embed를 스킵하게 한다.
+  에이전트는 갱신한 파일 목록을 `EMBED_FILES: <공백구분 경로>` 한 줄로 출력한다.
+
+2단계 완료 후 에이전트 출력에서 `EMBED_FILES:` 줄을 파싱해 경로를 수집한다.
 
 ### 3단계: 통합 embed 1회 호출
 
-<!-- E-4: 두 하위 스킬의 EMBED_FILES 출력을 수집·중복 제거 후 단 1회 embed -->
+<!-- E-4: 두 에이전트의 EMBED_FILES 출력을 수집·중복 제거 후 단 1회 embed -->
 <!-- E-5: 순환 가드 — LOREGIST_AUTO_GUARD=1 + --file 경로 지정 방식이므로
           embed가 drift→wiki-update 재기동을 유발하지 않는다(무한 재귀 차단).
           handbook/`_wiki` 커밋은 현재 post-commit hook이 embed로 안 잡지만,
           wiki-update 실행 자체가 임베딩을 수행하므로 대부분 무력화됨.
           hook 범위 확장은 별도 검토 사항(F-1 참고). -->
 
-1단계·2단계에서 출력된 `EMBED_FILES:` 줄을 파싱해 경로를 합산하고 중복을 제거한다.
+1단계·2단계에서 수집한 `EMBED_FILES:` 경로를 합산하고 중복을 제거한다.
 
 - 합산 경로 목록이 0건이면 embed 스킵.
 - `--dry-run` 이면 embed 스킵 (출력만).
@@ -95,7 +108,7 @@ LOREGIST_AUTO_GUARD=1 loregist embed --file <경로>
 
 ```
 [wiki-update] 프로젝트: <key>
-  1/2 handbook-update ... 완료 (N개 파일 갱신)
-  2/2 catalog-update  ... 완료 (M개 항목 갱신)
+  1/2 handbook-update-core ... 완료 (N개 파일 갱신)
+  2/2 catalog-update-core  ... 완료 (M개 항목 갱신)
 [wiki-update] 완료
 ```
