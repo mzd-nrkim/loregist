@@ -26,43 +26,29 @@ flowchart LR
 
 ### 저장 계층 ↔ 저장위치 한눈에
 
-작업데이터의 네 계층(Hot · Cold · vault · Wiki)이 **어디에 저장되고 어떻게 접근**하는지 한 그림으로:
+작업데이터의 네 계층(Hot · Cold · vault · Wiki)이 어디에 저장되고 어떻게 접근하는지:
 
 ```mermaid
-flowchart TB
-    WORK([📌 업무 활동])
-    WORK -->|"journal / watch"| HOT
-
-    subgraph INREPO["📂 repo 안 — 직접 읽기"]
-        HOT["🔥 Hot · 오늘 작업문서\ndocs/dev/{오늘}/"]
-        WIKI["🧠 Wiki · 증류 지식\n_wiki/ T-NNN.md · D-NNN.md"]
-    end
-
-    subgraph OUTREPO["🗄️ repo 밖 — 원본 아카이브"]
-        VAULT["vault · 원본 보관소\nlogvault/{project}/YYYY-MM-DD.log"]
-    end
-
-    DB[("❄️ Cold · 검색 계층\npgvector — doc_chunks\n+ doc_originals.full_text")]
-    CTX([컨텍스트 주입])
-
-    HOT -.->|"rotate · 7일 초과"| VAULT
-    HOT -->|embed| DB
-    VAULT -->|embed| DB
-    DB -->|"loregist search top-k"| CTX
+flowchart LR
+    WORK([업무]) --> HOT["🔥 Hot\ndocs/dev/{오늘}/"]
+    HOT -->|"rotate(7일)"| VAULT["🗄️ vault\nlogvault/"]
+    HOT -->|embed| COLD[("❄️ Cold\npgvector")]
+    VAULT -->|embed| COLD
+    HOT -->|"catalog-update 증류"| WIKI["🧠 Wiki\n_wiki/"]
+    COLD -->|"search top-k"| CTX([컨텍스트 주입])
     HOT --> CTX
-    HOT -->|"catalog-update 증류"| WIKI
     WIKI --> CTX
-    WIKI -.->|"증류 결과도 로그로"| WORK
 ```
 
-| 계층 | 저장위치 | 접근 수단 | 라이프사이클 |
-|---|---|---|---|
-| 🔥 **Hot** | `docs/dev/{오늘}/` (repo 안) | LLM 직접 읽기 | 기록 직후 — 최신 |
-| ❄️ **Cold** | pgvector `doc_chunks` | `loregist search` top-k | embed된 모든 로그(Hot·vault 포함) |
-| 🗄️ **vault** | `logvault/{project}/*.log` (repo 밖) + DB `doc_originals.full_text` | 수동 접근 · 복원 | rotate(7일 초과)로 Hot에서 이동 |
-| 🧠 **Wiki** | `{docs_root}/_wiki/` `T-*.md`·`D-*.md` | 직접 읽기 / `catalog-update` 증류 | 로그에서 topic·decision 증류 |
+| 계층 | 저장 위치 | 접근 방식 |
+|---|---|---|
+| 🔥 **Hot** | `docs/dev/{오늘}/` (repo 안) | LLM 직접 읽기 |
+| ❄️ **Cold** | pgvector `doc_chunks` | `loregist search` 시맨틱 검색 |
+| 🗄️ **vault** | `logvault/{project}/` (repo 밖) | rotate로 이동 · 수동 복원 |
+| 🧠 **Wiki** | `{docs_root}/_wiki/` | 직접 읽기 · `catalog-update` 갱신 |
 
-> **Cold = 접근 모드, vault = 물리 저장소.** rotate된 원본은 vault(`logvault/`)에 남고, 그 전문이 embed되어 Cold(pgvector)에서 검색된다 — 같은 데이터의 "보관 vs 검색" 두 얼굴이다.
+- **Cold와 vault는 같은 데이터의 두 얼굴이다** — vault는 rotate된 원본 파일, Cold는 그것을 embed한 검색 인덱스.
+- **Wiki 파일 형식** — `T-NNN.md`(topic) · `D-NNN.md`(decision). `catalog-update`가 로그에서 자동 증류해 생성·갱신한다.
 
 <!-- LOCK:END -->
 
