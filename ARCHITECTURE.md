@@ -3,7 +3,7 @@
 → [README.md](README.md) 로 돌아가기
 
 개인 repo 문서·로그 컨텍스트 검색 인프라.  
-LLM이 repo 전체를 무차별 Grep/Glob 탐색하지 않도록, **검색 계층(Hot → Cold vector DB → vault)** 으로 컨텍스트 우선순위를 부여하는 중앙 도구.
+LLM이 repo 전체를 무차별 Grep/Glob 탐색하지 않도록, **검색 계층(Hot → Cold vector DB → vault)** 으로 컨텍스트 우선순위를 부여한다. 동시에 코드·로그 변경에서 핸드북(README·ARCHITECTURE)을 LLM이 자동 갱신하는 **문서 유지 계층**을 함께 제공한다.
 
 → 사용법은 [docs/public/USAGE.md](docs/public/USAGE.md)를 참조.
 
@@ -27,7 +27,7 @@ flowchart TB
 
 - **①** 시작은 문서 관리형 repo — 모든 작업을 Markdown 문서로 관리하던 repo.
 - **②** VM 환경세팅 중 로그를 보며 다음 작업을 유추했는데, 히스토리 정리에 드는 effort가 컸다. 업무를 `*.log`로 흘려보내고, 정리를 자동화하려 `process-history` 스킬을 만들었다.
-- **③** 로그로 일하니 문서가 쌓이고 AI가 필요한 내용을 못 찾았다(토큰도 아끼고 싶었다). 그래서 증류 계층을 뒀다 — **handbook**은 LLM이 로그·코드 변경에서 산문으로 증류·유지하는 1차 문서(README·ARCHITECTURE)다. catalog는 텍스트 흐름(작업문서·로그, 또는 지정 시 handbook)에서 topic·decision을 LLM이 증류한 **자동 색인(opt-in)** — Karpathy가 말한 **"LLM wiki"**에 대응하는 선택적 확장이며, 메인은 어디까지나 handbook이다.
+- **③** 로그로 일하니 문서가 쌓이고 AI가 필요한 내용을 못 찾았다(토큰도 아끼고 싶었다). 그래서 증류 계층을 뒀다 — **handbook**은 LLM이 유지하는 1차 산문 문서, catalog는 topic·decision 자동 색인(opt-in). → 상세 비교는 [§ handbook과 LLM wiki](#handbook과-llm-wikicatalog--비슷하지만-다르다) 참조.
 - **④** 그래도 문서는 계속 쌓인다. 오래된 건 repo 밖(cold)으로 빼고 원본은 vault에 남겨, 언제든 찾아볼 수 있게 했다.
 
 이 흐름이 아래 [세 원칙](#세-원칙)(텍스트 단위 작업수행 · 토큰 절약 · LLM 핸드북)으로 굳었다.
@@ -52,31 +52,6 @@ graph LR
     B -->|"loregist search<br/>top-k 청크 주입"| C["📖 LLM 핸드북<br/>산문 문서 증류·유지"]
     C -->|"handbook-update<br/>README·ARCHITECTURE 갱신"| A
 ```
-
-### handbook과 LLM wiki(catalog) — 비슷하지만 다르다
-
-Karpathy가 말한 **"LLM wiki"**는 LLM이 텍스트에서 지식을 *전자동*으로 증류·유지하는 지식 베이스다. loregist의 catalog(`_wiki/`)가 여기에 대응한다 — 사람은 읽기만 하고, 생성·갱신은 LLM이 전담한다.
-
-handbook은 이와 **비슷하지만 다르다**: **구조와 의도는 사람이 정의하고, 갱신만 LLM에 위임**한다(`handbook-update`). README·ARCHITECTURE의 골격·관점은 사람이 잡고, 코드가 바뀌면 LLM이 해당 섹션만 최신화한다.
-
-| | LLM wiki (catalog) | handbook |
-|---|---|---|
-| 구조·골격 정의 | LLM 전자동 | **사람** |
-| 내용 갱신 | LLM | LLM |
-| 사람 역할 | 읽기 | **정의·통제 + 읽기** |
-| 위치 | opt-in 곁가지 | **메인** |
-
-loregist는 전자동 wiki보다 이 하이브리드를 메인으로 둔다 — 문서의 의도·구조는 사람이 통제하고, 갱신 비용만 LLM에 넘기는 균형이다.
-
-#### catalog(LLM wiki)의 한계
-
-catalog는 handbook 미지정 시 작업문서·로그(**cold로 빠진 원본까지**, `logvault`)를 소스로 자동 증류한다. 소스가 넓고 자동인 만큼 대가가 따른다:
-
-- **인덱스 비대화** — topic·decision이 누적되면 인덱스(`TOPICS.md`·`README` 카탈로그 개요)도 **선형으로** 커진다. 통째로 읽는 색인으로 쓰면 문서량이 많아질수록 토큰 절약이 무의미해진다. catalog의 이점은 통독이 아니라 **검색 계층(wiki tier)에서 top-k로 소비될 때만** 유지된다 — 그 모드에선 "정제됨" 신호 품질 우위는 남지만 검색되는 로그와의 구조적 차이는 옅어진다.
-- **stale 박제** — 철회된 과거 결정도 자동 증류돼 색인에 남기 쉽다. 사람이 섹션을 정리하는 handbook과 달리 폐기 판단을 사람이 일일이 하기 어렵다.
-- **증류·재스캔 비용** — 소스(로그)가 클수록 `--now`/`--force` 전체 재스캔 비용이 커진다(증분 스캔 `.last_catalog_update`로 완화).
-
-요컨대 **handbook은 사람의 큐레이션으로 분량이 자연히 제한**되어 토큰 절약이 구조적으로 유지되지만, catalog는 자동 증식이라 상한이 없다. loregist가 handbook을 메인, catalog를 opt-in 곁가지로 둔 이유다.
 
 ### 왜 만들었나 — 컨텍스트 문제
 
@@ -131,6 +106,31 @@ loregist를 이미 아는 개념으로 위치 짓는다면:
 | **지식 베이스 / 위키** | LLM이 유지하는 산문 handbook(README·ARCHITECTURE)이 1차. `_wiki/`의 topic·decision 색인(catalog)은 Karpathy의 **"LLM wiki"**에 대응하는 opt-in 확장. |
 
 요약하면 loregist는 **개인 업무 로그 위의 RAG + hot/cold 메모리 계층 + LLM이 유지하는 핸드북**의 결합이다.
+
+### handbook과 LLM wiki(catalog) — 비슷하지만 다르다
+
+Karpathy가 말한 **"LLM wiki"**는 LLM이 텍스트에서 지식을 *전자동*으로 증류·유지하는 지식 베이스다. loregist의 catalog(`_wiki/`)가 여기에 대응한다 — 사람은 읽기만 하고, 생성·갱신은 LLM이 전담한다.
+
+handbook은 이와 **비슷하지만 다르다**: **구조와 의도는 사람이 정의하고, 갱신만 LLM에 위임**한다(`handbook-update`). README·ARCHITECTURE의 골격·관점은 사람이 잡고, 코드가 바뀌면 LLM이 해당 섹션만 최신화한다.
+
+| | LLM wiki (catalog) | handbook |
+|---|---|---|
+| 구조·골격 정의 | LLM 전자동 | **사람** |
+| 내용 갱신 | LLM | LLM |
+| 사람 역할 | 읽기 | **정의·통제 + 읽기** |
+| 위치 | opt-in 곁가지 | **메인** |
+
+loregist는 전자동 wiki보다 이 하이브리드를 메인으로 둔다 — 문서의 의도·구조는 사람이 통제하고, 갱신 비용만 LLM에 넘기는 균형이다.
+
+#### catalog(LLM wiki)의 한계
+
+catalog는 handbook 미지정 시 작업문서·로그(**cold로 빠진 원본까지**, `logvault`)를 소스로 자동 증류한다. 소스가 넓고 자동인 만큼 대가가 따른다:
+
+- **인덱스 비대화** — topic·decision이 누적되면 인덱스(`TOPICS.md`·`README` 카탈로그 개요)도 **선형으로** 커진다. 통째로 읽는 색인으로 쓰면 문서량이 많아질수록 토큰 절약이 무의미해진다. catalog의 이점은 통독이 아니라 **검색 계층(wiki tier)에서 top-k로 소비될 때만** 유지된다 — 그 모드에선 "정제됨" 신호 품질 우위는 남지만 검색되는 로그와의 구조적 차이는 옅어진다.
+- **stale 박제** — 철회된 과거 결정도 자동 증류돼 색인에 남기 쉽다. 사람이 섹션을 정리하는 handbook과 달리 폐기 판단을 사람이 일일이 하기 어렵다.
+- **증류·재스캔 비용** — 소스(로그)가 클수록 `--now`/`--force` 전체 재스캔 비용이 커진다(증분 스캔 `.last_catalog_update`로 완화).
+
+요컨대 **handbook은 사람의 큐레이션으로 분량이 자연히 제한**되어 토큰 절약이 구조적으로 유지되지만, catalog는 자동 증식이라 상한이 없다. loregist가 handbook을 메인, catalog를 opt-in 곁가지로 둔 이유다.
 
 ## 비개발자 빠른 시작
 
@@ -221,10 +221,10 @@ flowchart LR
 | **임베딩** | `chunking.py`(`split_log`/`split_md`) → `embed.py` | 전문은 `doc_originals`에 upsert, 청크는 `doc_chunks`에 insert |
 | **검색** | `search.py` | 쿼리 임베딩 → cosine top-k, `project` 스코프, hybrid는 RRF 융합. cascade 전략은 wiki→hot→cold 계층 조기종료 |
 | **소비** | Claude Code 스킬 | top-k 청크를 컨텍스트로 주입해 반복 작업 자동화 |
-| **증류** | `catalog_gen.py` (`catalog-update`) | 로그에서 topic·decision을 `_wiki/` 위키로 추출 |
+| **증류** | `catalog_gen.py` (`catalog-update`) | handbook 또는 작업문서·로그에서 topic·decision을 `_wiki/`로 추출 |
 | **회수** | `rotate.py` | Hot(repo) → vault(Cold) 이동. 전문 보존으로 삭제 후에도 복원 |
 
-> 핵심 비대칭: **다량의 원시 로그는 검색 랭킹으로**, **소수의 정제 지식은 LLM 위키로**. 둘은 경쟁이 아니라 같은 텍스트 흐름의 두 끝이다.
+> 핵심 비대칭: **다량의 원시 로그는 검색 랭킹으로**, **소수의 정제 지식은 handbook·catalog로 증류**. 둘은 경쟁이 아니라 같은 텍스트 흐름의 두 끝이다.
 
 ### 스택
 
@@ -309,7 +309,7 @@ flowchart TB
 | 🧠 **Wiki** | `{docs_root}/_wiki/` | 직접 읽기 · `wiki-update` 갱신 |
 
 - **Cold와 vault는 같은 데이터의 두 얼굴이다** — vault는 rotate된 원본 파일, Cold는 그것을 embed한 검색 인덱스.
-- **Wiki 파일 형식** — `T-NNN.md`(topic) · `D-NNN.md`(decision). `wiki-update`가 로그에서 자동 증류해 생성·갱신한다.
+- **Wiki 파일 형식** — `T-NNN.md`(topic) · `D-NNN.md`(decision). `wiki-update`가 handbook·작업문서·로그에서 자동 증류해 생성·갱신한다.
 - `doc_originals.full_text`에 전문 보관 → vault 삭제 후에도 복원 가능.
 - `cold` 경로는 rotate 비대상 — 이미 cold storage 종착지, embed만 대상.
 
@@ -331,7 +331,7 @@ flowchart LR
     DOC -->|"daily-report\ncarry-over"| OUT["보고·이월"]
     DOC -->|"handbook-update"| HB["README·ARCHITECTURE"]
     DOC -->|"catalog-update"| KB
-    HB -->|"wiki-update 포섭"| KB
+    HB -.->|"wiki-update 실행 시 catalog 소스"| KB
 ```
 
 | 스킬 | 역할 |
