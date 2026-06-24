@@ -21,6 +21,51 @@ flowchart LR
 
 > 단계별 구현·전체 파이프라인은 [ARCHITECTURE.md › 데이터 플로우](ARCHITECTURE.md#데이터-플로우-전체) 참조.
 
+<!-- LOCK:START -->
+<!-- 아래 블록은 수동 유지 영역입니다 (handbook-update 자동 갱신 제외) -->
+
+### 저장 계층 ↔ 저장위치 한눈에
+
+작업데이터의 네 계층(Hot · Cold · vault · Wiki)이 **어디에 저장되고 어떻게 접근**하는지 한 그림으로:
+
+```mermaid
+flowchart TB
+    WORK([📌 업무 활동])
+    WORK -->|"journal / watch"| HOT
+
+    subgraph INREPO["📂 repo 안 — 직접 읽기"]
+        HOT["🔥 Hot · 오늘 작업문서\ndocs/dev/{오늘}/"]
+        WIKI["🧠 Wiki · 증류 지식\n_wiki/ T-NNN.md · D-NNN.md"]
+    end
+
+    subgraph OUTREPO["🗄️ repo 밖 — 원본 아카이브"]
+        VAULT["vault · 원본 보관소\nlogvault/{project}/YYYY-MM-DD.log"]
+    end
+
+    DB[("❄️ Cold · 검색 계층\npgvector — doc_chunks\n+ doc_originals.full_text")]
+    CTX([컨텍스트 주입])
+
+    HOT -.->|"rotate · 7일 초과"| VAULT
+    HOT -->|embed| DB
+    VAULT -->|embed| DB
+    DB -->|"loregist search top-k"| CTX
+    HOT --> CTX
+    HOT -->|"catalog-update 증류"| WIKI
+    WIKI --> CTX
+    WIKI -.->|"증류 결과도 로그로"| WORK
+```
+
+| 계층 | 저장위치 | 접근 수단 | 라이프사이클 |
+|---|---|---|---|
+| 🔥 **Hot** | `docs/dev/{오늘}/` (repo 안) | LLM 직접 읽기 | 기록 직후 — 최신 |
+| ❄️ **Cold** | pgvector `doc_chunks` | `loregist search` top-k | embed된 모든 로그(Hot·vault 포함) |
+| 🗄️ **vault** | `logvault/{project}/*.log` (repo 밖) + DB `doc_originals.full_text` | 수동 접근 · 복원 | rotate(7일 초과)로 Hot에서 이동 |
+| 🧠 **Wiki** | `{docs_root}/_wiki/` `T-*.md`·`D-*.md` | 직접 읽기 / `catalog-update` 증류 | 로그에서 topic·decision 증류 |
+
+> **Cold = 접근 모드, vault = 물리 저장소.** rotate된 원본은 vault(`logvault/`)에 남고, 그 전문이 embed되어 Cold(pgvector)에서 검색된다 — 같은 데이터의 "보관 vs 검색" 두 얼굴이다.
+
+<!-- LOCK:END -->
+
 ### 1. 모든 업무를 텍스트 로그로 흘려보낸다
 
 embed된 것만 검색되므로, 검색의 출발점은 기록이다. 회의 결정·해결한 문제·검토한 문서를 `*.log` 텍스트로 남기면 LLM이 청크 단위로 소비·생산할 수 있다. 기록되지 않은 업무는 검색 대상이 아니다.
