@@ -49,6 +49,37 @@ loregist watch --dir ~/notes          # 특정 디렉터리 감시
 # → Ctrl-C 로 종료
 ```
 
+### 비개발자 기록 키트 (일괄 설치)
+
+터미널 없이 macOS에서 loregist를 쓰기 위한 3부품 묶음이다. 개발자가 `install-nondev-kit.sh`를 한 번 실행하면 아래 부품이 자동으로 배치·등록된다.
+
+```bash
+# 비개발자 키트 일괄 설치 (변수 치환·배치·launchd 등록 포함)
+bash scripts/install-nondev-kit.sh
+```
+
+설치 후 비개발자 입력 동선은 3단계로 끝난다:
+
+1. **더블클릭** — `loregist-journal.command`를 Finder에서 더블클릭한다 (Shortcuts 앱 단축키를 등록하면 키보드 단축키 한 번으로 대체 가능)
+2. **타이핑** — 대화창에 기록할 내용을 입력한다
+3. **끝** — Enter를 누르면 기록이 저장된다. 터미널·명령어 불필요
+
+| 부품 | 역할 | 최종 배치 위치 |
+|------|------|----------------|
+| `loregist-journal.shortcut` | Shortcuts 앱 단축키 — 키보드 단축키 한 번으로 텍스트 입력창을 열어 loregist journal 기록 | Shortcuts 앱 (더블클릭으로 가져오기) |
+| `loregist-journal.command` | 더블클릭 입력 진입점 — Finder에서 더블클릭하면 대화창이 열리고 텍스트를 입력해 기록 | `~/Applications/` 또는 바탕화면 |
+| `auto-embed.plist` | 1시간 주기 자동 embed LaunchAgent — launchd가 매 1시간마다 `loregist embed`를 자동 실행 | `~/Library/LaunchAgents/io.loregist.auto-embed.plist` |
+
+개발자 세팅 전체 절차는 [SETUP.md](SETUP.md)를 참조.
+
+#### 한계 (솔직하게)
+
+- **개발자 1회 세팅 필요** — `scripts/install-nondev-kit.sh`를 개발자가 먼저 실행해야 키트가 배치된다. 비개발자 본인이 직접 실행하기 어렵다면 개발자에게 요청한다.
+- **macOS 전용** — `.command`, LaunchAgent(`plist`)는 macOS에서만 동작한다. Windows·Linux에서는 이 키트를 사용할 수 없다.
+- **embed 엔진(Docker) 상시 가동 전제** — 검색 색인은 Docker 기반 pgvector에 저장된다. Docker가 꺼져 있으면 `auto-embed`가 실패해 새로 기록한 내용이 검색 색인에 반영되지 않는다. 기록 자체는 남지만, 나중에 검색으로 찾으려면 Docker가 켜진 상태에서 `loregist embed`를 수동 실행해야 한다.
+
+아래는 각 부품의 개별 설치·동작 방법이다.
+
 ### macOS 자동화 (터미널 없이 사용)
 
 #### Shortcuts 앱 단축키 (텍스트 입력 → 자동 기록)
@@ -56,6 +87,15 @@ loregist watch --dir ~/notes          # 특정 디렉터리 감시
 1. [`scripts/examples/loregist-journal.shortcut`](../../scripts/examples/loregist-journal.shortcut)을 더블클릭해 Shortcuts 앱으로 가져오기
 2. Shortcuts 앱에서 단축키 지정 (예: ⌥Space)
 3. 이후 어디서든 단축키 → 텍스트 입력창 → 자동 로그 기록
+
+#### loregist-journal.command (더블클릭 진입점)
+
+Shortcuts 앱 대신 Finder에서 더블클릭으로 기록창을 열고 싶을 때 사용한다.
+
+```bash
+# ~/Applications/ 에 복사하면 더블클릭으로 실행 가능
+cp scripts/examples/loregist-journal.command ~/Applications/
+```
 
 #### launchd 자동 embed (1시간마다)
 
