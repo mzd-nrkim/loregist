@@ -31,13 +31,13 @@ flowchart LR
 ```mermaid
 flowchart TB
     subgraph REPO["📂 repo 안 (파일시스템)"]
-        HOT["🔥 Hot  docs/dev/{오늘}/"]
-        WIKI["🧠 Wiki  _wiki/"]
+        HOT["🔥 Hot"]
+        WIKI["🧠 Wiki"]
     end
     subgraph OUTREPO["💾 repo 밖 (파일시스템)"]
-        VAULT["🗄️ vault  logvault/"]
+        VAULT["🗄️ vault"]
     end
-    DB[("❄️ Cold  pgvector")]
+    DB[("❄️ Cold")]
 
     HOT -->|"rotate(7일)"| VAULT
     HOT -->|embed| DB
@@ -64,19 +64,6 @@ embed된 것만 검색되므로, 검색의 출발점은 기록이다. 회의 결
 ### 2. 기록을 "온도"로 계층화한다
 
 모든 기록을 항상 컨텍스트에 넣으면 윈도우가 금방 찬다. loregist는 접근 방식을 온도로 나눈다.
-
-```mermaid
-flowchart TD
-    REQ[작업 요청 / 쿼리]
-    REQ -->|최신 정보| HOT["🔥 Hot — 직접 읽기\ndocs/dev/{오늘}/"]
-    REQ -->|과거 이력| SEARCH["❄️ Cold — loregist search\n시맨틱 검색"]
-    REQ -->|원본 파일| VAULT["🗄️ vault — 수동 접근\nlogvault/"]
-    SEARCH --> DB[(pgvector\ndoc_chunks)]
-    DB -->|top-k 청크| CTX[컨텍스트 주입]
-    HOT --> CTX
-    VAULT --> CTX
-    CTX --> ANS[LLM 응답]
-```
 
 - **Hot** — 오늘 작업문서. LLM이 직접 읽는다.
 - **Cold** — 시간이 지나 vault로 이동(rotate)된 기록. 검색으로만 닿는다. repo **밖**으로 빠지므로 파일시스템을 탐색해도 과거 이력에 걸리지 않는다 (`.gitignore`는 내용을 못 막고 CLAUDE.md 규칙은 soft boundary라, 물리적 이동만이 구조적 보장이 된다).
