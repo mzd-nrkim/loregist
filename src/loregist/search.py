@@ -830,7 +830,7 @@ def apply_recency_boost(rows: list[dict], boost: float) -> list[dict]:
 
 
 def _history_path() -> Path:
-    p = Path.home() / ".cache" / "loregist" / "history"
+    p = Path.home() / ".cache" / "stashdex" / "history"
     p.parent.mkdir(parents=True, exist_ok=True)
     return p
 

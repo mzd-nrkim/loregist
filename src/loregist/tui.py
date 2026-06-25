@@ -322,7 +322,7 @@ def open_fulltext_fallback(conn, project: str, source_path: str) -> tuple[bool, 
     row = cur.fetchone()
     if not row or not row[0]:
         return False, "DB에 원문도 없음"
-    tmp = Path("/tmp") / f"loregist_{Path(source_path).name}"
+    tmp = Path("/tmp") / f"stashdex_{Path(source_path).name}"
     tmp.write_text(row[0], encoding="utf-8")
     ok, msg = open_path(str(tmp))
     return ok, (msg or f"(DB 원문 복원 → {tmp})")

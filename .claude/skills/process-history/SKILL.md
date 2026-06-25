@@ -8,10 +8,10 @@ allowed-tools: Agent, Bash, Read, Write, Edit, Glob, Grep
 ## 프로젝트 해석
 
 1. `--project <key>` 인자가 있으면 그 프로젝트 사용
-2. 없으면 `loregist project current` (cwd 기준 자동 추론)
+2. 없으면 `stashdex project current` (cwd 기준 자동 추론)
 3. 추론 실패 시 사용자에게 프로젝트 키 질문
 
-`docs_root`: 추론된 프로젝트의 docs_root 값 (`loregist project list`로 확인)
+`docs_root`: 추론된 프로젝트의 docs_root 값 (`stashdex project list`로 확인)
 
 → loregist/CLAUDE.md "스킬 공통 — 프로젝트 추론 규칙" 적용
 

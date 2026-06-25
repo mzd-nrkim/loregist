@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 중앙 loregist CLI 래퍼
+# 중앙 stashdex CLI 래퍼
 _SELF="${BASH_SOURCE[0]}"
 # 심볼릭 링크를 따라 실제 스크립트 위치 해석
 while [ -L "$_SELF" ]; do
@@ -58,7 +58,7 @@ case "$subcmd" in
     cd "$SCRIPT_DIR" && exec "$PYTHON" -m loregist.watch "$@"
     ;;
   *)
-    echo "사용법: loregist <embed|search|project|rotate|status|similar|vault-cleanup|catalog-init|catalog|warmup|journal|watch> [옵션]"
+    echo "사용법: stashdex <embed|search|project|rotate|status|similar|vault-cleanup|catalog-init|catalog|warmup|journal|watch> [옵션]"
     echo "  embed         [--project P] [--dry-run] [--include-today]  문서/로그 임베딩"
     echo "  search        <쿼리> [--top-k N] [--project P] [--all-projects] [--plain|--json|--open N|--no-interactive]  시맨틱 검색"
     echo "  project       <add|list|current>            프로젝트 그룹 커맨드 (온보딩·목록·현재 추론)"

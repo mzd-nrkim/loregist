@@ -13,7 +13,7 @@
 
 # B-3a. handbook 스키마 해석
 
-`loregist project list --json` 으로 현재 프로젝트의 `handbook` 배열을 읽는다.
+`stashdex project list --json` 으로 현재 프로젝트의 `handbook` 배열을 읽는다.
 각 항목은 **문자열** 또는 **객체 `{path, writable, update_when}`** 두 가지 형식이 모두 올 수 있다.
 
 ## 항목 형식별 처리
@@ -37,7 +37,7 @@
 ## 1단계: handbook 확인
 
 ```bash
-loregist project list --json
+stashdex project list --json
 ```
 
 결과에서 현재 프로젝트의 `handbook` 배열을 추출한다. 각 항목은 문자열 또는 `{path, writable, update_when}` 객체다 (B-3a 참조).
@@ -130,7 +130,7 @@ git show -s --format=%cI <sha>
 ## 2단계: 시맨틱 검색
 
 ```bash
-loregist search <후보명>
+stashdex search <후보명>
 ```
 
 결과에서 상위 1건의 유사도를 파싱한다. **유사도 > 0.85이면 중복 판정.**
@@ -261,7 +261,7 @@ summary: "핵심 내용 한 줄 요약"
 - `status`: 항상 `draft`로 초기 생성
 - `tags`: 빈 리스트로 초기화 (LLM이 관련 키워드 1~3개 제안 가능)
 - `related`: 빈 리스트로 초기화
-- `edges`: 빈 리스트로 초기화 (loregist catalog --lint로 보강 유도)
+- `edges`: 빈 리스트로 초기화 (stashdex catalog --lint로 보강 유도)
 
 ## 기존 파일 related 업데이트
 
@@ -312,7 +312,7 @@ Edit 툴 사용. 본문(frontmatter 이후 내용) 덮어쓰기 금지.
 ### 2단계: 인덱스 재생성
 
 ```bash
-loregist catalog --project {project_key}
+stashdex catalog --project {project_key}
 ```
 
 TOPICS.md·DECISIONS.md 인덱스를 재생성한다.
@@ -350,7 +350,7 @@ ISO 8601 타임스탬프를 `_wiki/.last_catalog_update` 파일에 Write 툴로 
 #### `--defer-embed` **없을 때** (기본): 직접 embed 실행
 
 ```bash
-LOREGIST_AUTO_GUARD=1 loregist embed --file <경로1> --file <경로2> …
+LOREGIST_AUTO_GUARD=1 stashdex embed --file <경로1> --file <경로2> …
 ```
 
 생성·갱신된 `_wiki/*.md` 파일 각각에 `--file <경로>` 인자를 붙여 실행한다.

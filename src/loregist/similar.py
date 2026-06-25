@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""loregist similar — 특정 파일과 유사한 과거 문서 찾기."""
+"""stashdex similar — 특정 파일과 유사한 과거 문서 찾기."""
 import argparse
 import sys
 from pathlib import Path

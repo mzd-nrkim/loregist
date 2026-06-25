@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""loregist status — 프로젝트별 임베딩 현황 대시보드."""
+"""stashdex status — 프로젝트별 임베딩 현황 대시보드."""
 import argparse
 import json
 import sys
@@ -101,7 +101,7 @@ def _build_json_output(conn, *, project_filter: "str | None" = None) -> dict:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="loregist status — 임베딩 현황 대시보드")
+    parser = argparse.ArgumentParser(description="stashdex status — 임베딩 현황 대시보드")
     parser.add_argument("--json", action="store_true", help="JSON 형식으로 출력")
     parser.add_argument("--project", default=None, help="특정 프로젝트만 표시")
     args = parser.parse_args()

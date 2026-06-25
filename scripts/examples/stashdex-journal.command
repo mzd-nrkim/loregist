@@ -2,7 +2,7 @@
 # ============================================================
 # 키트 역할: 더블클릭 입력 진입점
 #   이 파일을 더블클릭하면 macOS 대화창이 열리고,
-#   입력한 텍스트가 loregist journal 명령으로 기록된다.
+#   입력한 텍스트가 stashdex journal 명령으로 기록된다.
 #
 # 최종 배치 위치: ~/Applications/ 또는 바탕화면
 #   install-nondev-kit.sh 실행 시 자동 복사·변수 치환된다.
@@ -12,7 +12,7 @@ set -euo pipefail
 
 # ── 설치 시 sed 치환 대상 변수 ──────────────────────────────────────────────
 PROJECT_KEY="personal-work"
-LOREGIST_BIN="/usr/local/bin/loregist"
+LOREGIST_BIN="/usr/local/bin/stashdex"
 # ────────────────────────────────────────────────────────────────────────────
 
 # osascript display dialog로 텍스트 입력 받기.
@@ -33,8 +33,8 @@ if [[ -z "$INPUT" ]]; then
   exit 0
 fi
 
-# loregist journal 호출 — INPUT은 항상 이중 따옴표로 인용해 셸 주입 방지
+# stashdex journal 호출 — INPUT은 항상 이중 따옴표로 인용해 셸 주입 방지
 "$LOREGIST_BIN" journal "$INPUT" --project "$PROJECT_KEY"
 
 # 성공 알림
-osascript -e 'display notification "기록 완료" with title "loregist"'
+osascript -e 'display notification "기록 완료" with title "stashdex"'

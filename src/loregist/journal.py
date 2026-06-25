@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""loregist journal — 오늘 날짜 로그 파일에 [HH:MM] 메시지 append."""
+"""stashdex journal — 오늘 날짜 로그 파일에 [HH:MM] 메시지 append."""
 import argparse
 import datetime
 import sys
@@ -44,7 +44,7 @@ def run_journal(message: str, project: str | None = None) -> Path:
 def main():
     parser = argparse.ArgumentParser(
         description="오늘 날짜 로그 파일에 메시지를 기록합니다.",
-        usage="loregist journal <메시지> [--project P]",
+        usage="stashdex journal <메시지> [--project P]",
     )
     parser.add_argument("message", nargs="?", help="기록할 메시지")
     parser.add_argument("--project", help="프로젝트명 (기본: cwd 추론)")
@@ -53,7 +53,7 @@ def main():
     if not args.message:
         parser.print_usage(sys.stderr)
         print(
-            "\n오류: 메시지를 입력하세요. 예: loregist journal \"오늘 API 스펙 검토 완료\"",
+            "\n오류: 메시지를 입력하세요. 예: stashdex journal \"오늘 API 스펙 검토 완료\"",
             file=sys.stderr,
         )
         sys.exit(2)

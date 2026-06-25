@@ -1,4 +1,4 @@
-"""loregist project — project 서브커맨드 디스패처."""
+"""stashdex project — project 서브커맨드 디스패처."""
 import os
 import sys
 
@@ -50,7 +50,7 @@ def main(argv: list | None = None) -> int:
 
 def _print_usage() -> None:
     print(
-        "사용법: loregist project <list|current|add> [옵션]",
+        "사용법: stashdex project <list|current|add> [옵션]",
         file=sys.stderr,
     )
     print("  list     프로젝트 목록 JSON 출력", file=sys.stderr)

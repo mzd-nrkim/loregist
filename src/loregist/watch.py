@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""loregist watch — 지정 디렉터리를 감시하여 config extensions 기반 확장자 변경 시 자동 embed."""
+"""stashdex watch — 지정 디렉터리를 감시하여 config extensions 기반 확장자 변경 시 자동 embed."""
 import argparse
 import sys
 import time
@@ -100,7 +100,7 @@ def _validate_dir_in_project(watch_dir: Path, project: str, explicit_project: st
 def main():
     parser = argparse.ArgumentParser(
         description="지정 디렉터리를 감시하여 config extensions 기반 확장자 변경 시 자동으로 embed합니다.",
-        usage="loregist watch [--dir DIR] [--project P]",
+        usage="stashdex watch [--dir DIR] [--project P]",
     )
     parser.add_argument("--dir", help="감시할 디렉터리 (기본: 현재 프로젝트의 vault)")
     parser.add_argument("--project", help="프로젝트명 (기본: cwd 추론)")

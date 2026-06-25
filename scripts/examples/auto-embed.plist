@@ -1,28 +1,28 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
   키트 역할: 1시간 주기 자동 embed LaunchAgent
-    launchd가 이 파일을 읽어 매 3600초(1시간)마다 loregist embed를 실행한다.
+    launchd가 이 파일을 읽어 매 3600초(1시간)마다 stashdex embed를 실행한다.
     임베딩이 자동으로 최신 상태를 유지되므로 터미널을 열 필요가 없다.
 
-  배치 위치: ~/Library/LaunchAgents/io.loregist.auto-embed.plist
+  배치 위치: ~/Library/LaunchAgents/io.stashdex.auto-embed.plist
 
   설치 방법:
     install-nondev-kit.sh 실행 시 자동 복사·등록된다.
     수동 설치 시 아래 명령을 실행한다:
       cp auto-embed.plist ~/Library/LaunchAgents/
-      launchctl load ~/Library/LaunchAgents/io.loregist.auto-embed.plist
+      launchctl load ~/Library/LaunchAgents/io.stashdex.auto-embed.plist
 
   제거 방법:
-      launchctl unload ~/Library/LaunchAgents/io.loregist.auto-embed.plist
-      rm ~/Library/LaunchAgents/io.loregist.auto-embed.plist
+      launchctl unload ~/Library/LaunchAgents/io.stashdex.auto-embed.plist
+      rm ~/Library/LaunchAgents/io.stashdex.auto-embed.plist
 -->
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>Label</key><string>io.loregist.auto-embed</string>
+  <key>Label</key><string>io.stashdex.auto-embed</string>
   <key>ProgramArguments</key>
   <array>
-    <string>/usr/local/bin/loregist</string>
+    <string>/usr/local/bin/stashdex</string>
     <string>embed</string>
     <string>--incremental</string>
   </array>
@@ -36,7 +36,7 @@
     <string>/Users/mz01-risingnrkim/.nvm/versions/node/v20.9.0/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
   </dict>
   <key>StartInterval</key><integer>3600</integer>
-  <key>StandardOutPath</key><string>/tmp/loregist-embed.log</string>
-  <key>StandardErrorPath</key><string>/tmp/loregist-embed.log</string>
+  <key>StandardOutPath</key><string>/tmp/stashdex-embed.log</string>
+  <key>StandardErrorPath</key><string>/tmp/stashdex-embed.log</string>
 </dict>
 </plist>

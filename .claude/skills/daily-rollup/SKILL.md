@@ -11,9 +11,9 @@ allowed-tools: Bash, Read, Write, Edit, Glob, Grep
 
 ## 동작
 
-1. `loregist project list` 파싱 → `docs_root != null` 프로젝트 목록 확보; `PERSONAL_WORK_ROOT` = `personal-work` 프로젝트의 `docs_root` 값
+1. `stashdex project list` 파싱 → `docs_root != null` 프로젝트 목록 확보; `PERSONAL_WORK_ROOT` = `personal-work` 프로젝트의 `docs_root` 값
    ```bash
-   PERSONAL_WORK_ROOT=$(loregist project list | python3 -c "import sys,json; d=json.load(sys.stdin); print(next(p['docs_root'] for p in d if p['name']=='personal-work'))")
+   PERSONAL_WORK_ROOT=$(stashdex project list | python3 -c "import sys,json; d=json.load(sys.stdin); print(next(p['docs_root'] for p in d if p['name']=='personal-work'))")
    ```
 2. `--project <key>` 인자가 있으면 해당 프로젝트만 처리
 3. 각 프로젝트: `{docs_root}/{date}/{date}.01.작업문서.md` 파일에서 `## 오늘 할 일` 섹션 추출
@@ -43,7 +43,7 @@ allowed-tools: Bash, Read, Write, Edit, Glob, Grep
 
 ## 실행 절차
 1. 날짜 결정 (인자 또는 오늘)
-2. `loregist project list` 실행, 파싱; `PERSONAL_WORK_ROOT` 결정 (위 동작 1단계 참조)
+2. `stashdex project list` 실행, 파싱; `PERSONAL_WORK_ROOT` 결정 (위 동작 1단계 참조)
 3. 대상 프로젝트 순회:
    - `{docs_root}/{date}/` 디렉터리 탐색
    - `{date}.01.작업문서.md` 파일 읽기
@@ -77,4 +77,4 @@ updated: {YYYY-MM-DD HH:MM}
 1. 인덱스 파일이 없는 프로젝트는 해당 프로젝트 섹션에 `> 작업문서 없음` 표시 후 스킵
 2. `docs_root`가 null인 프로젝트는 건너뜀
 3. 기존 `personal-work/daily/{date}.md` 마커 밖 내용 절대 삭제 금지
-4. `loregist project list` 실패 시 에러 출력 후 중단
+4. `stashdex project list` 실패 시 에러 출력 후 중단

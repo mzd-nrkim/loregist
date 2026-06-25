@@ -1,25 +1,25 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
-  macOS Shortcuts 앱용 loregist journal 진입 단축키 템플릿.
+  macOS Shortcuts 앱용 stashdex journal 진입 단축키 템플릿.
 
   설치 방법:
     1. 이 파일을 더블클릭하거나 Shortcuts 앱으로 가져오기(Import).
     2. 단축키 지정: Shortcuts 앱 → 단축키 우클릭 → "단축키 편집" → 키 조합 설정(예: ⌥Space).
-    3. loregist 바이너리가 PATH(또는 /usr/local/bin)에 있어야 합니다.
-       `make install` 또는 `ln -s /절대경로/loregist /usr/local/bin/loregist`
+    3. stashdex 바이너리가 PATH(또는 /usr/local/bin)에 있어야 합니다.
+       `make install` 또는 `ln -s /절대경로/stashdex /usr/local/bin/stashdex`
 
   동작 흐름:
     액션 1: [텍스트 입력 요청] "오늘 기록할 내용"
-    액션 2: [셸 스크립트 실행] /usr/local/bin/loregist journal "<입력값>"
-    액션 3: [알림 표시] "loregist 기록됨"
+    액션 2: [셸 스크립트 실행] /usr/local/bin/stashdex journal "<입력값>"
+    액션 3: [알림 표시] "stashdex 기록됨"
 
   주의: macOS 전용. Windows/Linux 비개발자 대상 대안은 추후 제공 예정.
 -->
 <plist version="1.0">
 <dict>
   <key>WFWorkflowName</key>
-  <string>loregist journal</string>
+  <string>stashdex journal</string>
   <key>WFWorkflowActions</key>
   <array>
     <dict>
@@ -43,7 +43,7 @@
         <key>WFShellScriptShell</key>
         <string>/bin/bash</string>
         <key>WFShellScriptSource</key>
-        <string>/usr/local/bin/loregist journal "$1"</string>
+        <string>/usr/local/bin/stashdex journal "$1"</string>
         <key>WFShellScriptInput</key>
         <string>Provided Input</string>
       </dict>
@@ -54,7 +54,7 @@
       <key>WFWorkflowActionParameters</key>
       <dict>
         <key>WFNotificationActionTitle</key>
-        <string>loregist 기록됨</string>
+        <string>stashdex 기록됨</string>
         <key>WFNotificationActionBody</key>
         <string>vault/journal/오늘.log 에 저장되었습니다</string>
       </dict>

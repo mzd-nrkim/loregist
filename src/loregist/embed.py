@@ -42,7 +42,7 @@ def load_embedder():
         from sentence_transformers import SentenceTransformer
         # 캐시가 있으면 local_files_only=True로 HF Hub 네트워크 요청을 완전 차단한다.
         # 기업망 SSL 환경에서 Hub 연결 타임아웃이 반복되어 수십 분이 소요되는 문제 방지.
-        # 캐시 없으면 False → 정상 다운로드(loregist warmup 시나리오).
+        # 캐시 없으면 False → 정상 다운로드(stashdex warmup 시나리오).
         _model_cache = MODELS_DIR / ("models--" + MODEL_NAME.replace("/", "--"))
         _embedder = SentenceTransformer(
             MODEL_NAME,

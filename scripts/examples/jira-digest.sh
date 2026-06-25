@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# 오늘 Jira 업데이트 이슈를 loregist journal 로그에 append
+# 오늘 Jira 업데이트 이슈를 stashdex journal 로그에 append
 # 의존: curl, jq, JIRA_URL / JIRA_TOKEN 환경변수
 TODAY=$(date +%Y-%m-%d)
-VAULT="${LOREGIST_VAULT:-$HOME/.loregist}"
+VAULT="${LOREGIST_VAULT:-$HOME/stashdex/vault}"
 OUTPUT="$VAULT/journal/$TODAY.log"
 mkdir -p "$(dirname "$OUTPUT")"
 curl -s -H "Authorization: Bearer $JIRA_TOKEN" \

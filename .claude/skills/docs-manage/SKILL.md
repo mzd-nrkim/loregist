@@ -8,7 +8,7 @@ allowed-tools: Agent, Read
 ## 프로젝트 해석
 
 1. `--project <key>` 인자가 있으면 그 프로젝트 사용
-2. 없으면 `loregist project current` (cwd 기준 자동 추론)
+2. 없으면 `stashdex project current` (cwd 기준 자동 추론)
 3. 추론 실패 시 사용자에게 프로젝트 키 질문
 
 공통 문서 위치: `{docs_root}/../etc/` (= `personal-work/projects/{project}/etc/`)

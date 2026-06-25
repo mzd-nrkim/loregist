@@ -8,10 +8,10 @@ allowed-tools: Bash, Read, Write, Edit, Glob, Grep, Task, ToolSearch, mcp__atlas
 ## 프로젝트 해석
 
 1. `--project <key>` 인자가 있으면 그 프로젝트 사용
-2. 없으면 `loregist project current` (cwd 기준 자동 추론)
+2. 없으면 `stashdex project current` (cwd 기준 자동 추론)
 3. 추론 실패 시 사용자에게 프로젝트 키 질문
 
-`docs_root`: 추론된 프로젝트의 docs_root 값 (`loregist project list`로 확인)
+`docs_root`: 추론된 프로젝트의 docs_root 값 (`stashdex project list`로 확인)
 
 → loregist/CLAUDE.md "스킬 공통 — 프로젝트 추론 규칙" 적용
 작업문서 경로: `{docs_root}/{날짜}/{날짜}.01.작업문서.md`
@@ -118,7 +118,7 @@ symlink: `ln -sfn {오늘날짜}/daily-report.md {docs_root}/daily-report-latest
 
 # 리포 경로
 
-개인 리포 경로는 현재 프로젝트의 `docs_root` 상위 디렉터리 (`loregist project list`로 확인).
+개인 리포 경로는 현재 프로젝트의 `docs_root` 상위 디렉터리 (`stashdex project list`로 확인).
 `--team` 옵션 사용 시 팀 리포 경로는 사용자에게 확인 또는 대화 맥락에서 추론한다.
 
 # 제약 조건

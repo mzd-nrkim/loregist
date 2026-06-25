@@ -7,7 +7,7 @@
 | **스캔 범위** | base 필터(기본) | `.last_catalog_update` 이후 변경분만 처리 |
 | | 전체 스캔(`--scan` / `--now`) | base 무시, 전체 소스 스캔 |
 | **프로젝트 범위** | 단일(기본) | 현재 또는 `--project` 지정 프로젝트 |
-| | 전체(`--all`) | `loregist project list --json` 순회 |
+| | 전체(`--all`) | `stashdex project list --json` 순회 |
 | **재생성 여부** | 신규만(기본·`--scan`·`--now`) | 기존 T/D 본문 유지, 신규 항목만 생성 |
 | | 재작성 포함(`--force`) | 보호 장치 하 기존 본문 재생성 허용 |
 
@@ -176,7 +176,7 @@ handbook에 {N}개 파일을 추가했습니다.
 ## 프로젝트 목록 수집
 
 ```bash
-loregist project list --json
+stashdex project list --json
 ```
 
 JSON 배열에서 각 프로젝트의 `key`와 `docs_root`를 추출한다.
@@ -187,7 +187,7 @@ JSON 배열에서 각 프로젝트의 `key`와 `docs_root`를 추출한다.
 
 1. 해당 프로젝트의 `docs_root`를 기준으로 **`_wiki/` 디렉토리 존재 여부 확인**
    - 없으면 해당 프로젝트는 건너뛰고 출력에 `(skip: _wiki 없음)` 표시
-2. `loregist project list --json` 결과에서 해당 프로젝트의 `handbook` 배열 추출 (B-3a 규칙 적용)
+2. `stashdex project list --json` 결과에서 해당 프로젝트의 `handbook` 배열 추출 (B-3a 규칙 적용)
 3. **스캔 소스 결정** (B-3 표준 절차): handbook이 있으면 1순위, 없으면 대체 소스
 4. 인수 조합에 따라 분기:
    - `--all` 단독: base 필터 적용(프로젝트별 `.last_catalog_update` 기준)

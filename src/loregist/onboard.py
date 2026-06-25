@@ -1,9 +1,9 @@
-"""loregist project add — 문답형 온보딩 마법사.
+"""stashdex project add — 문답형 온보딩 마법사.
 
 사용법:
-    loregist project add                            # 인터랙티브(TTY)
-    loregist project add --project myproj --yes     # 기본값으로 빠른 진행
-    loregist project add --project myproj --type docs_root \\
+    stashdex project add                            # 인터랙티브(TTY)
+    stashdex project add --project myproj --yes     # 기본값으로 빠른 진행
+    stashdex project add --project myproj --type docs_root \\
         --docs-root tools/my/dev --vault logvault/my --yes   # 비대화(스크립트)
 
 B-1~B-4: argparse + 문답 루프, cwd 기반 기본값, 입력 검증, 비-TTY 가드
@@ -157,7 +157,7 @@ def main(argv: list[str] | None = None) -> int:
     project_cmd.py 의 add 핸들러가 `onboard.main(argv)` 로 호출한다.
     """
     parser = argparse.ArgumentParser(
-        prog="loregist project add",
+        prog="stashdex project add",
         description="새 프로젝트를 문답형으로 온보딩한다.",
     )
     parser.add_argument("--project", help="프로젝트 키 (기본: cwd 폴더명 정규화)")
@@ -312,7 +312,7 @@ def main(argv: list[str] | None = None) -> int:
             catalog_ok = False
             applied_stages.append(f"[FAIL] C. catalog init 실패 (exit {rc})")
             print(f"  [경고] catalog init 실패 (exit {rc}). 수동으로 실행하세요:", file=sys.stderr)
-            print(f"    loregist catalog-init --project {key}", file=sys.stderr)
+            print(f"    stashdex catalog-init --project {key}", file=sys.stderr)
         else:
             applied_stages.append("[OK] C. catalog init")
     else:

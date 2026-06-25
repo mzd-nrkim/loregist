@@ -1,4 +1,4 @@
-"""loregist onboard 입력 수집 / 검증 계층.
+"""stashdex onboard 입력 수집 / 검증 계층.
 
 onboard.py 에서 분리된 입력 수집·검증 함수 모음.
 - 입력 수집: _prompt, _prompt_bare, _ask_key, _ask_type, _ask_path, _ask_catalog, _confirm
@@ -315,10 +315,10 @@ def _print_summary(
         print()
         print("  [주의] embed 단계가 실패했습니다.")
         print("  projects.toml 등록과 디렉터리 생성은 완료되었습니다.")
-        print(f"  나중에 수동으로 실행하세요: loregist embed --project {key}")
+        print(f"  나중에 수동으로 실행하세요: stashdex embed --project {key}")
 
     print()
     print("  다음 단계:")
-    print(f"    loregist journal      # 새 작업 일지 작성")
-    print(f"    loregist search <쿼리> --project {key}  # 문서 검색")
+    print(f"    stashdex journal      # 새 작업 일지 작성")
+    print(f"    stashdex search <쿼리> --project {key}  # 문서 검색")
     print()

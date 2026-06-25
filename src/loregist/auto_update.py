@@ -1,7 +1,7 @@
 """
 auto_update.py — 헤드리스 Claude 자동 기동 및 사후 리포트 (Phase C+D1)
 
-세션 밖(CLAUDECODE 없음)에서 loregist embed 실행 후 drift가 있으면
+세션 밖(CLAUDECODE 없음)에서 stashdex embed 실행 후 drift가 있으면
 claude -p 를 subprocess로 기동해 handbook/catalog 갱신 스킬을 무인 실행한다.
 재귀 기동 방지를 위해 LOREGIST_AUTO_GUARD 환경변수를 자식 프로세스에 주입한다.
 """

@@ -7,10 +7,10 @@ allowed-tools: Bash, Read, Write, Edit, Glob, Grep
 ## 프로젝트 해석
 
 1. `--project <key>` 인자가 있으면 그 프로젝트 사용
-2. 없으면 `loregist project current` (cwd 기준 자동 추론)
+2. 없으면 `stashdex project current` (cwd 기준 자동 추론)
 3. 추론 실패 시 호출자에게 프로젝트 키를 명시하도록 오류 반환
 
-`docs_root`: 추론된 프로젝트의 docs_root 값 (`loregist project list`로 확인)
+`docs_root`: 추론된 프로젝트의 docs_root 값 (`stashdex project list`로 확인)
 
 → loregist/CLAUDE.md "스킬 공통 — 프로젝트 추론 규칙" 적용
 
@@ -25,7 +25,7 @@ allowed-tools: Bash, Read, Write, Edit, Glob, Grep
 | 인수 | 설명 |
 |---|---|
 | `--project <key>` | 대상 프로젝트 키 명시 (생략 시 자동 추론) |
-| `--all` | 전 프로젝트 순회 — `loregist project list --json` 목록 전체에 대해 순차 실행 |
+| `--all` | 전 프로젝트 순회 — `stashdex project list --json` 목록 전체에 대해 순차 실행 |
 | `--now [이름]` | 즉시 전체 스캔 모드 — `.last_catalog_update` base 무시, 전체 스캔 강제 실행. `[이름]`을 지정하면 T-xxx/D-xxx id 또는 제목 매칭 항목만 처리. `--scan` 포섭: `--scan`과 동일한 스캔 경로를 수행하면서 게이트(base) 무시 + 누락 항목 생성까지 포함 |
 | `--force` | 기존 T/D 항목 본문 재생성 포함 — 보호 장치 하 재작성 허용 (`--now` 또는 `--scan`과 함께 사용) |
 | `--recommend-sources` | handbook 추천 모드 — 파일을 분석해 추가 여부를 사용자에게 확인 |
