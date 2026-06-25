@@ -54,11 +54,14 @@ case "$subcmd" in
   journal)
     cd "$SCRIPT_DIR" && exec "$PYTHON" -m loregist.journal "$@"
     ;;
+  memo)
+    cd "$SCRIPT_DIR" && exec "$PYTHON" -m loregist.memo "$@"
+    ;;
   watch)
     cd "$SCRIPT_DIR" && exec "$PYTHON" -m loregist.watch "$@"
     ;;
   *)
-    echo "사용법: stashdex <embed|search|project|rotate|status|similar|vault-cleanup|catalog-init|catalog|warmup|journal|watch> [옵션]"
+    echo "사용법: stashdex <embed|search|project|rotate|status|similar|vault-cleanup|catalog-init|catalog|warmup|journal|memo|watch> [옵션]"
     echo "  embed         [--project P] [--dry-run] [--include-today]  문서/로그 임베딩"
     echo "  search        <쿼리> [--top-k N] [--project P] [--all-projects] [--plain|--json|--open N|--no-interactive]  시맨틱 검색"
     echo "  project       <add|list|current>            프로젝트 그룹 커맨드 (온보딩·목록·현재 추론)"
@@ -70,6 +73,7 @@ case "$subcmd" in
     echo "  catalog       --project <키>               _wiki/TOPICS.md·DECISIONS.md 재생성"
     echo "  warmup                                     임베딩 모델 사전 다운로드·캐시 (최초 1회)"
     echo "  journal       <메시지> [--project P]       오늘 날짜 로그 파일에 [HH:MM] 메시지 기록"
+    echo "  memo          <메시지> [--project P]  메시지 단위 독립 파일로 저장"
     echo "  watch         [--dir DIR] [--project P]    디렉터리 감시 → *.log / *.md 변경 시 자동 embed"
     exit 1
     ;;

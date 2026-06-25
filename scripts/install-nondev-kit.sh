@@ -181,6 +181,34 @@ install_command() {
   done_ ".command 배치 완료: $COMMAND_DST (PROJECT_KEY=$PROJECT_KEY)"
 }
 
+# ── C-6: memo .command 배치 ──────────────────────────────────────────────────
+install_memo_command() {
+  info "C-6: stashdex-memo.command 배치 중..."
+
+  local memo_cmd_src="$REPO_DIR/scripts/examples/stashdex-memo.command"
+  local memo_cmd_dst="$APPS_DIR/stashdex-memo.command"
+
+  if [[ ! -f "$memo_cmd_src" ]]; then
+    warn ".command 원본 없음: $memo_cmd_src — 스킵"
+    return 0
+  fi
+
+  mkdir -p "$APPS_DIR"
+
+  local tmp_memo
+  tmp_memo="$(mktemp /tmp/stashdex-memo-XXXXXX.command)"
+
+  # PROJECT_KEY와 LOREGIST_BIN 두 변수 치환 (stashdex-memo.command는 Python 파일이므로 Python 변수 형식 치환)
+  sed -e "s|PROJECT_KEY = \".*\"|PROJECT_KEY = \"$PROJECT_KEY\"|g" \
+      -e "s|LOREGIST_BIN = \".*\"|LOREGIST_BIN = \"$LOREGIST_SYMLINK\"|g" \
+      "$memo_cmd_src" > "$tmp_memo"
+  chmod +x "$tmp_memo"
+  mv "$tmp_memo" "$memo_cmd_dst"
+  chmod +x "$memo_cmd_dst"
+
+  done_ "memo .command 배치 완료: $memo_cmd_dst"
+}
+
 # ── C-5: Shortcut 수동 임포트 안내 ───────────────────────────────────────────
 guide_shortcut_import() {
   info "C-5: Shortcut 자동 임포트는 불가능합니다. 아래 단계를 수동으로 수행하세요."
@@ -218,6 +246,9 @@ main() {
   echo ""
 
   install_command
+  echo ""
+
+  install_memo_command
   echo ""
 
   guide_shortcut_import

@@ -67,6 +67,8 @@ def discover_embed_files(project: str, include_today: bool = False) -> list[tupl
 
     def _kind(p: Path) -> str:
         # 수집(extensions)과 처리(kind/청킹)는 별개 정책: .md→md/split_md, 그 외→log/split_log(의도된 설계)
+        if "memo" in p.parts:
+            return "memo"
         return "md" if p.suffix == ".md" else "log"
 
     # vault
@@ -204,6 +206,8 @@ def embed_file(conn, project: str, path: str) -> None:
         kind = "catalog"
     elif str(p) in handbook_paths:
         kind = "handbook"
+    elif "memo" in p.parts:
+        kind = "memo"
     else:
         kind = "md" if p.suffix == ".md" else "log"
 
@@ -211,7 +215,7 @@ def embed_file(conn, project: str, path: str) -> None:
     text = p.read_text(encoding="utf-8", errors="replace")
     original_id = upsert_original(conn, project, path, kind, text, fhash)
 
-    chunks = split_md(text) if p.suffix == ".md" else split_log(text)
+    chunks = split_log(text) if kind == "log" else split_md(text)
     if chunks:
         embeddings = embed_documents(chunks)
         insert_chunks(conn, original_id, project, path, kind, chunks, embeddings)
@@ -291,7 +295,7 @@ def main():
                 text = Path(path).read_text(encoding="utf-8", errors="replace")
                 original_id = upsert_original(conn, project, path, kind, text, fhash)
 
-                chunks = split_md(text) if Path(path).suffix == ".md" else split_log(text)
+                chunks = split_log(text) if kind == "log" else split_md(text)
                 if not chunks:
                     conn.commit()
                     processed += 1
