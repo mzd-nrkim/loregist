@@ -23,6 +23,17 @@
 #   # 또는
 #   catalog   = "tools/personal-work/projects/my-project/_wiki"  # 경로 직접 지정
 #
+# catalog_readme (기본 None — 키 생략 시 비대상; catalog 설정 시에만 유효):
+#   catalog 색인의 헤더로 쓸 README 경로를 지정한다.
+#   catalog = "경로" → 절대경로 resolve (WORKSPACE 기준 상대경로 또는 절대경로)
+#   키 생략          → None
+#   ※ catalog가 None이면 catalog_readme는 무시되고 경고가 출력된다.
+#
+# 예시:
+#   [projects.my-project]
+#   catalog        = true
+#   catalog_readme = "tools/personal-work/projects/my-project/_wiki/README.md"
+#
 # vault_cleanup (기본 off — 키 생략 시 비대상, 비가역 삭제이므로 opt-in 필수):
 #   vault_cleanup = true   → 활성화, 기본 보존 기간 90일(VAULT_RETENTION_DAYS) 적용
 #   vault_cleanup = 180    → 활성화, 보존 기간 180일로 override
@@ -68,6 +79,17 @@
 #   # 또는
 #   auto_catalog_update  = true   # catalog만 자동 갱신 (handbook은 제안 모드 유지)
 #
+# auto_commit (기본 false — 키 생략 시 false):
+#   auto_commit = true  → handbook/catalog 무인 자동 갱신 후 변경분을 자동 커밋
+#   키 생략             → false (자동 커밋 안 함)
+#   ※ auto_handbook_update / auto_catalog_update 와 함께 쓸 때 의미가 있다.
+#
+# 예시:
+#   [projects.my-project]
+#   auto_handbook_update = true
+#   auto_catalog_update  = true
+#   auto_commit          = true   # 갱신 후 자동 커밋까지 수행
+#
 # handbook (기본 [] — 키 생략 시 비대상):
 #   LLM이 스캔할 산문 문서 목록 — wiki-update 스킬의 갱신 소스.
 #   handbook 선언 시 catalog가 암묵 활성화된다 (docs_root 또는 catalog 키 필수;
@@ -110,6 +132,7 @@
 #
 # ──────────────────────────────────────────────────────────────────────────────
 
+# 기본 구성 — embed + catalog + vault_cleanup
 [projects.project-a]
 docs_root = "workspace/project-a/dev"
 vault     = "logvault/project-a"
@@ -117,15 +140,35 @@ cold      = "logvault/project-a/cold"
 catalog   = true
 vault_cleanup = true
 
+# 보존기간·rotate·확장자 override 예시
 [projects.project-b]
-docs_root = "workspace/project-b/dev"
-vault     = "logvault/project-b"
-cold      = "logvault/project-b/cold"
-vault_cleanup = 180
+docs_root  = "workspace/project-b/dev"
+vault      = "logvault/project-b"
+cold       = "logvault/project-b/cold"
+vault_cleanup = 180              # 90일 기본 대신 180일 보존
+hot_days   = 3                   # 7일 기본 대신 3일 경과 시 rotate
+extensions = ["md", "log"]       # txt 제외, md·log만 대상
 
+# done(rotate 대상)만 사용하는 최소 구성
 [projects.demo]
 vault = "logvault/demo"
 done  = "workspace/demo/plans/done"
 
+# docs_root만 — embed만, rotate/catalog 비대상
 [projects.personal-work]
 docs_root = "~/workspace/personal-work"
+
+# 풀옵션 — handbook 기반 wiki 무인 자동 갱신 + 자동 커밋
+[projects.full-featured]
+docs_root      = "workspace/full-featured/dev"
+vault          = "logvault/full-featured"
+cold           = "logvault/full-featured/cold"
+catalog        = true
+catalog_readme = "workspace/full-featured/dev/_wiki/README.md"
+handbook = [
+  "workspace/full-featured/README.md",
+  {path = "workspace/full-featured/ARCHITECTURE.md", writable = true, update_when = "아키텍처·모듈 구조 변경 시"},
+]
+auto_handbook_update = true       # drift 시 handbook 무인 갱신
+auto_catalog_update  = true       # drift 시 catalog 무인 갱신 (둘 다 true → wiki-update)
+auto_commit          = true       # 갱신 후 자동 커밋

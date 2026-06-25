@@ -153,9 +153,11 @@ AI(클로드)와 함께 쓸 때 특히 유용합니다. Claude가 `stashdex sear
 API 설계 관련 과거 기록 찾아줘
 ```
 
-Claude가 `stashdex search`로 관련 기록을 찾아 정리합니다.
+자연어로 요청하면, Claude가 `stashdex search`를 호출해 관련 기록을 관련도 순으로 찾아 정리해줍니다.
 
-![Claude Code에서 자연어로 검색을 요청하면 stashdex search를 자동 호출해 관련 기록을 정리한다](docs/public/assets/claude-code-speak-examples.png)
+![자연어로 검색을 요청하는 화면](docs/public/assets/search-speak-request.png)
+
+![Claude가 stashdex search로 관련 기록을 찾아 정리한 결과](docs/public/assets/search-speak-result.png)
 
 **스킬 호출**
 
