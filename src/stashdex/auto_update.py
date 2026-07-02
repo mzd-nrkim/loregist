@@ -3,7 +3,7 @@ auto_update.py — 헤드리스 Claude 자동 기동 및 사후 리포트 (Phase
 
 세션 밖(CLAUDECODE 없음)에서 stashdex embed 실행 후 drift가 있으면
 claude -p 를 subprocess로 기동해 handbook/catalog 갱신 스킬을 무인 실행한다.
-재귀 기동 방지를 위해 LOREGIST_AUTO_GUARD 환경변수를 자식 프로세스에 주입한다.
+재귀 기동 방지를 위해 STASHDEX_AUTO_GUARD 환경변수를 자식 프로세스에 주입한다.
 """
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ import subprocess
 import sys
 from typing import Any
 
-from loregist.config import decide_entry_skill
+from stashdex.config import decide_entry_skill
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +28,7 @@ def _resolve_claude_bin() -> str:
     방지하기 위해 여러 경로를 순서대로 시도한다.
 
     해석 우선순위:
-    1. LOREGIST_CLAUDE_BIN 환경변수 — 명시적 재정의
+    1. STASHDEX_CLAUDE_BIN 환경변수 — 명시적 재정의
     2. shutil.which("claude") — 현재 PATH에 있으면 그 경로
     3. ~/.nvm/versions/node/*/bin/claude glob — nvm 설치 경로 (최신 버전)
     4. /opt/homebrew/bin/claude, /usr/local/bin/claude — Homebrew/전역 설치
@@ -40,7 +40,7 @@ def _resolve_claude_bin() -> str:
         claude 실행 파일 경로 또는 "claude" (폴백).
     """
     # 1. 명시적 환경변수
-    explicit = os.environ.get("LOREGIST_CLAUDE_BIN")
+    explicit = os.environ.get("STASHDEX_CLAUDE_BIN")
     if explicit:
         return explicit
 
@@ -63,7 +63,7 @@ def _resolve_claude_bin() -> str:
     # 5. 폴백: 기존 동작 유지 + 경고
     logger.warning(
         "[auto_update] claude 실행 파일을 찾을 수 없습니다. "
-        "PATH에 의존해 기동합니다 — LOREGIST_CLAUDE_BIN 환경변수로 경로를 지정하세요."
+        "PATH에 의존해 기동합니다 — STASHDEX_CLAUDE_BIN 환경변수로 경로를 지정하세요."
     )
     return "claude"
 
@@ -95,13 +95,13 @@ def should_auto_launch(
         기동할 entry skill 이름, 또는 None(기동 불필요).
 
     억제 조건 (하나라도 해당하면 None):
-    - LOREGIST_AUTO_GUARD 환경변수 존재 → 재귀 가드 (C-3)
+    - STASHDEX_AUTO_GUARD 환경변수 존재 → 재귀 가드 (C-3)
     - CLAUDECODE 환경변수 존재 → 세션 안, hook이 처리 (B-4)
     - drift_count == 0 → 갱신 불필요
     - 두 플래그 모두 False → 무인 진입점 없음
     """
     # C-3: 재귀 가드
-    if env.get("LOREGIST_AUTO_GUARD"):
+    if env.get("STASHDEX_AUTO_GUARD"):
         return None
 
     # B-4: Claude Code 세션 안 — hook이 처리
@@ -189,7 +189,7 @@ def build_search_command(query: str, folders: list[str]) -> list[str]:
 def launch_headless(entry_skill: str, project: str, cwd: str) -> dict:
     """헤드리스 Claude를 subprocess로 기동하고 결과 dict를 반환한다.
 
-    자식 프로세스 환경에 LOREGIST_AUTO_GUARD=1을 주입해 재귀 기동을 방지한다.
+    자식 프로세스 환경에 STASHDEX_AUTO_GUARD=1을 주입해 재귀 기동을 방지한다.
     실행 실패 시 예외를 raise하지 않고 결과 dict에 오류 정보를 담아 반환한다.
 
     Parameters
@@ -211,7 +211,7 @@ def launch_headless(entry_skill: str, project: str, cwd: str) -> dict:
 
     # C-3: 재귀 가드 주입
     child_env = os.environ.copy()
-    child_env["LOREGIST_AUTO_GUARD"] = "1"
+    child_env["STASHDEX_AUTO_GUARD"] = "1"
 
     try:
         proc = subprocess.run(

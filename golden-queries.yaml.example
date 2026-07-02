@@ -13,8 +13,8 @@
 #       note: str       설명 (선택)
 #
 # 사용법:
-#   loregist eval
-#   loregist eval --golden golden-queries.yaml --rrf-k 60
+#   stashdex eval
+#   stashdex eval --golden golden-queries.yaml --rrf-k 60
 
 queries:
   # --- 약어/정확 키워드 (vector 단독 취약, fts/hybrid가 잡아야 함) ---

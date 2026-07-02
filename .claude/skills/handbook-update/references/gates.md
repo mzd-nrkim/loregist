@@ -581,10 +581,10 @@ embed 단계를 건너뛴다. `EMBED_FILES:` 출력도 하지 않는다.
 W-7에서 승인·반영된 handbook 파일 경로를 모아 아래 명령을 실행한다.
 
 ```bash
-LOREGIST_AUTO_GUARD=1 stashdex embed --file <갱신파일1> --file <갱신파일2> …
+STASHDEX_AUTO_GUARD=1 stashdex embed --file <갱신파일1> --file <갱신파일2> …
 ```
 
-- `LOREGIST_AUTO_GUARD=1` 환경변수를 prefix로 붙여 embed → handbook-update 재귀 호출을 차단한다.
+- `STASHDEX_AUTO_GUARD=1` 환경변수를 prefix로 붙여 embed → handbook-update 재귀 호출을 차단한다.
 - `--file` 플래그를 갱신 파일 수만큼 반복하여 지정한다.
 - `--all` 모드에서는 모든 프로젝트의 갱신 파일을 합산하여 한 번에 호출한다.
 

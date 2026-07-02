@@ -2,7 +2,7 @@
 vault_cleanup.py — vault + cold 파일 정리 도구
 
 사용법:
-    python -m loregist.vault_cleanup --project <프로젝트명> [--dry-run | --apply]
+    python -m stashdex.vault_cleanup --project <프로젝트명> [--dry-run | --apply]
 
 동작:
     1. vault_cleanup opt-in 프로젝트에 한해 동작 (미opt-in이면 안내 후 종료)
@@ -30,7 +30,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-from loregist.config import PROJECTS, VAULT_RETENTION_DAYS, DEFAULT_EXTENSIONS
+from stashdex.config import PROJECTS, VAULT_RETENTION_DAYS, DEFAULT_EXTENSIONS
 
 try:
     import psycopg2
@@ -143,7 +143,7 @@ def run(project: str, dry_run: bool = True) -> None:
 
     # DB 연결
     try:
-        from loregist.config import get_db_connection
+        from stashdex.config import get_db_connection
         conn_ctx = get_db_connection()
         conn = conn_ctx.__enter__()
     except Exception as e:

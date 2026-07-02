@@ -10,13 +10,14 @@ cold는 rotate 비대상 — 이미 cold storage에 있는 종착지 파일이�
 rotate 원: done(plans/done/) → 목적지: vault/cold/
 """
 import argparse
+import os
 import shutil
 import subprocess
 import sys
 from datetime import date, datetime
 from pathlib import Path
 
-from loregist.config import DEFAULT_EXTENSIONS, PROJECTS, get_db_connection, infer_project
+from stashdex.config import DEFAULT_EXTENSIONS, PROJECTS, get_db_connection, infer_project
 
 _IGNORE_FOR_EMPTY: frozenset[str] = frozenset({".DS_Store", ".gitkeep"})
 
@@ -211,7 +212,7 @@ def git_rm(repo_root: Path, file_path: Path) -> bool:
     )
     if check.returncode != 0:
         print(
-            f"[WARN] git 추적 파일 아님, git rm 건너뜀 (파일은 이미 vault로 이동됨): {file_path}",
+            f"[WARN] git 추적 파일 아님, git rm 건너뜀 (git 미추적 파일, os.remove로 직접 삭제 시도): {file_path}",
             file=sys.stderr,
         )
         return False
@@ -249,7 +250,11 @@ def _do_rotate(src: Path, dst: Path, repo_anchor: Path, label: str) -> bool:
         print(f"[ERROR] repo root 탐색 실패: {e}", file=sys.stderr)
         return False
 
-    git_rm(repo_root, src)
+    if not git_rm(repo_root, src):
+        try:
+            os.remove(src)
+        except OSError as e:
+            print(f"[WARN] os.remove 실패 (원본 제거 불가): {src}: {e}", file=sys.stderr)
     print(f"{label} {src} → {dst}")
     return True
 

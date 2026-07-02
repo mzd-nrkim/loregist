@@ -18,7 +18,7 @@ import sys
 from pathlib import Path
 
 # ── 입력 수집 / 검증 계층 import ─────────────────────────────────
-from loregist.onboard_input import (
+from stashdex.onboard_input import (
     _default_docs_root,
     _default_vault,
     _default_cold,
@@ -91,7 +91,7 @@ def _build_toml_block(
 
 def _append_toml(key: str, block: str) -> None:
     """(C-1) projects.toml 끝에 블록 append. 실행 직전 중복 키 재확인."""
-    from loregist.config import PROJECTS_FILE, load_projects
+    from stashdex.config import PROJECTS_FILE, load_projects
     # 실행 직전 재확인
     try:
         existing = load_projects(PROJECTS_FILE)
@@ -106,7 +106,7 @@ def _append_toml(key: str, block: str) -> None:
 
 def _create_dirs(proj_type: str, docs_root: str | None, vault: str, cold_or_done: str) -> list[Path]:
     """(C-2) 필요한 디렉터리 생성. 생성된 경로 목록 반환."""
-    from loregist.config import _resolve_path
+    from stashdex.config import _resolve_path
     created: list[Path] = []
 
     if proj_type == "docs_root" and docs_root:
@@ -134,7 +134,7 @@ def _create_dirs(proj_type: str, docs_root: str | None, vault: str, cold_or_done
 def _run_catalog_init(key: str) -> int:
     """(C-3) catalog_gen init --project <키> 실행. 종료코드 반환."""
     result = subprocess.run(
-        [sys.executable, "-m", "loregist.catalog_gen", "init", "--project", key],
+        [sys.executable, "-m", "stashdex.catalog_gen", "init", "--project", key],
         capture_output=False,
     )
     return result.returncode
@@ -143,7 +143,7 @@ def _run_catalog_init(key: str) -> int:
 def _run_embed(key: str) -> int:
     """(C-4) embed --project <키> 실행. 종료코드 반환."""
     result = subprocess.run(
-        [sys.executable, "-m", "loregist.embed", "--project", key],
+        [sys.executable, "-m", "stashdex.embed", "--project", key],
         capture_output=False,
     )
     return result.returncode

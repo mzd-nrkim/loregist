@@ -350,7 +350,7 @@ ISO 8601 타임스탬프를 `_wiki/.last_catalog_update` 파일에 Write 툴로 
 #### `--defer-embed` **없을 때** (기본): 직접 embed 실행
 
 ```bash
-LOREGIST_AUTO_GUARD=1 stashdex embed --file <경로1> --file <경로2> …
+STASHDEX_AUTO_GUARD=1 stashdex embed --file <경로1> --file <경로2> …
 ```
 
 생성·갱신된 `_wiki/*.md` 파일 각각에 `--file <경로>` 인자를 붙여 실행한다.
@@ -392,7 +392,7 @@ git -C {docs_root} commit -m "catalog-update: {N}개 항목 생성/갱신 [$(dat
 3. `.last_catalog_update` 파일도 해당 repo의 커밋에 포함한다.
 
 ```bash
-# repo-A 그룹 (loregist, sub-proj 등 동일 repo)
+# repo-A 그룹 (stashdex, sub-proj 등 동일 repo)
 git -C {repo_root_A} add {repo_A_catalog_파일_목록}
 git -C {repo_root_A} commit -m "catalog-update: {N}개 항목 생성/갱신 [$(date +%Y-%m-%d)]"
 

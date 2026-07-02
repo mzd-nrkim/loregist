@@ -4,14 +4,14 @@ import sys
 
 
 def _cmd_list() -> int:
-    from loregist.config import dump_projects
+    from stashdex.config import dump_projects
     print(dump_projects(as_json=True))
     return 0
 
 
 def _cmd_current() -> int:
-    from loregist.config import infer_project
-    cwd = os.environ.get("LOREGIST_CWD", os.getcwd())
+    from stashdex.config import infer_project
+    cwd = os.environ.get("STASHDEX_CWD", os.getcwd())
     try:
         print(infer_project(cwd))
         return 0
@@ -21,7 +21,7 @@ def _cmd_current() -> int:
 
 
 def _cmd_add(argv_after_subcommand: list) -> int:
-    from loregist import onboard
+    from stashdex import onboard
     return onboard.main(argv_after_subcommand)
 
 

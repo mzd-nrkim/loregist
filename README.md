@@ -214,4 +214,5 @@ stashdex search "엔드포인트 결정"                              # 검색
 - [docs/public/USAGE.md](docs/public/USAGE.md) — 전체 명령어·옵션·자동화·연동
 - [docs/public/SKILLS.md](docs/public/SKILLS.md) — 스킬 목록·인자·호출 방법
 - [ARCHITECTURE.md](ARCHITECTURE.md) — 설계 원리·구조·기술 상세
+  - [git을 어떻게 쓰는가](ARCHITECTURE.md#git을-어떻게-쓰는가) — git 히스토리를 트리거·기준점으로 사용하는 5개 지점 및 비-git 폴백
 - [docs/public/log-format.md](docs/public/log-format.md) — 로그 형식·기록 규칙

@@ -8,8 +8,8 @@ from pathlib import Path
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
-from loregist.config import PROJECTS, DEFAULT_EXTENSIONS, get_db_connection, infer_project
-from loregist.embed import embed_file
+from stashdex.config import PROJECTS, DEFAULT_EXTENSIONS, get_db_connection, infer_project
+from stashdex.embed import embed_file
 
 class _EmbedHandler(FileSystemEventHandler):
     """파일 변경/생성 이벤트를 받아 embed_file()을 호출한다."""

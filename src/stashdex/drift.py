@@ -20,7 +20,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
-from loregist import config
+from stashdex import config
 
 # code→doc 방향 안전망: 전수 점검 최대 허용 간격
 FORCE_CHECK_INTERVAL_DAYS: int = 7

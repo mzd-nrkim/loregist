@@ -34,9 +34,12 @@ def color_enabled(stream=sys.stdout) -> bool:
     """색상 출력 가능 여부. NO_COLOR 존중 + TTY 판정."""
     if os.environ.get("NO_COLOR"):
         return False
-    if os.environ.get("LOREGIST_FORCE_COLOR"):
+    if os.environ.get("STASHDEX_FORCE_COLOR"):
         return True
-    return bool(getattr(stream, "isatty", lambda: False)())
+    try:
+        return bool(getattr(stream, "isatty", lambda: False)())
+    except Exception:
+        return False
 
 
 def c(text: str, *styles: str, enabled: bool = True) -> str:

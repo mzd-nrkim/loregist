@@ -39,7 +39,7 @@ def _validate_key(key: str) -> str | None:
 
 def _check_duplicate(key: str) -> bool:
     """이미 등록된 키면 True."""
-    from loregist.config import load_projects, PROJECTS_FILE
+    from stashdex.config import load_projects, PROJECTS_FILE
     try:
         projects = load_projects(PROJECTS_FILE)
         return key in projects
@@ -54,7 +54,7 @@ def _validate_path(raw: str, key: str) -> tuple[str, str | None]:
     - WORKSPACE 밖 절대경로 거부 (_resolve_path 로 해석 후 is_relative_to 확인)
     반환: (정상화된_경로_문자열, 오류메시지_또는_None)
     """
-    from loregist.config import WORKSPACE, _resolve_path
+    from stashdex.config import WORKSPACE, _resolve_path
     if ".." in Path(raw).parts:
         return raw, f"경로에 '..'이 포함되어 있습니다: {raw}"
     resolved = _resolve_path(raw)
@@ -81,7 +81,7 @@ def _default_key(cwd: Path) -> str:
 
 def _default_docs_root(cwd: Path, key: str) -> str:
     """cwd 의 WORKSPACE 상대경로(+/dev). 추론 불가 시 tools/personal-work/projects/<키>/dev."""
-    from loregist.config import WORKSPACE
+    from stashdex.config import WORKSPACE
     try:
         rel = cwd.relative_to(WORKSPACE)
         return str(rel / "dev")
@@ -287,7 +287,7 @@ def _print_summary(
     applied_stages: list[str],
 ) -> None:
     """(C-4, C-5) 완료 요약 출력."""
-    from loregist.config import _resolve_path
+    from stashdex.config import _resolve_path
     print()
     print("=" * 50)
     print(f"  프로젝트 '{key}' 등록 완료")

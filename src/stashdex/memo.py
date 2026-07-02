@@ -6,7 +6,7 @@ import os
 import sys
 from pathlib import Path
 
-from loregist.config import PROJECTS, infer_project
+from stashdex.config import PROJECTS, infer_project
 
 
 def run_memo(message: str, project: str | None = None) -> Path:

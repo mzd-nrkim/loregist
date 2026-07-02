@@ -7,8 +7,8 @@ stashdex warmup — 임베딩 모델 사전 다운로드·캐시 도구.
 import sys
 import time
 
-from loregist.config import MODEL_NAME, MODELS_DIR
-from loregist.embed import load_embedder
+from stashdex.config import MODEL_NAME, MODELS_DIR
+from stashdex.embed import load_embedder
 
 
 def run_warmup() -> float:

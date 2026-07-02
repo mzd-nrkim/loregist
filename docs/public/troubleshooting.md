@@ -4,6 +4,44 @@
 
 ---
 
+## `command not found: stashdex` (2026-06-25)
+
+### 증상
+
+```bash
+$ stashdex search "쿼리"
+zsh: command not found: stashdex
+```
+
+### 원인
+
+`make install`이 수행되지 않아 `stashdex` 바이너리가 PATH에 등록되지 않은 상태다.
+설치 스크립트(`scripts/install-nondev-kit.sh`)가 `/usr/local/bin/stashdex` 심링크를 생성하는데, 이를 한 번도 실행하지 않았거나 `~/.local/bin/stashdex` 같은 임시 심링크만 존재하는 경우에도 PATH 미등록으로 나타날 수 있다.
+
+### 해결
+
+stashdex 레포 루트에서 `make install`을 실행한다:
+
+```bash
+cd /path/to/stashdex
+make install
+```
+
+설치 후 확인:
+
+```bash
+which stashdex   # → /usr/local/bin/stashdex
+stashdex --help  # 정상 출력되면 완료
+```
+
+### 추가 확인 사항
+
+- `make install`이 sudo를 요구하면 비밀번호를 입력한다.
+- `~/.local/bin/stashdex` 같은 임시 심링크가 있으면 `/usr/local/bin/stashdex`가 생성된 후 제거한다(`rm ~/.local/bin/stashdex`).
+- PATH에 `/usr/local/bin`이 포함되지 않은 환경이면 `export PATH="/usr/local/bin:$PATH"`를 `~/.zshrc`에 추가한다.
+
+---
+
 ## git pull 시 `published` 태그 clobber 에러 (2026-06-24)
 
 ### 증상

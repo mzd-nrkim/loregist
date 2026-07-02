@@ -14,7 +14,7 @@ help:
 	@echo "  make db-up       pgvector 컨테이너 기동"
 	@echo "  make db-down     pgvector 컨테이너 중지"
 	@echo "  make rotate-dry  현재 rotate 대상 미리보기"
-	@echo "  make rotate      loregist 날짜폴더 → vault 실이동"
+	@echo "  make rotate      stashdex 날짜폴더 → vault 실이동"
 
 install:
 	bash scripts/install-nondev-kit.sh
@@ -38,16 +38,16 @@ test-all:
 	$(PYTEST) -v --cov=. --cov-report=term-missing
 
 embed:
-	$(PYTHONPATH_SRC) $(PYTHON) -m loregist.embed --project loregist
+	$(PYTHONPATH_SRC) $(PYTHON) -m stashdex.embed --project stashdex
 
 embed-dry:
-	$(PYTHONPATH_SRC) $(PYTHON) -m loregist.embed --project loregist --dry-run
+	$(PYTHONPATH_SRC) $(PYTHON) -m stashdex.embed --project stashdex --dry-run
 
 rotate-dry:
-	$(PYTHONPATH_SRC) $(PYTHON) -m loregist.rotate --project loregist --dry-run
+	$(PYTHONPATH_SRC) $(PYTHON) -m stashdex.rotate --project stashdex --dry-run
 
 rotate:
-	$(PYTHONPATH_SRC) $(PYTHON) -m loregist.rotate --project loregist
+	$(PYTHONPATH_SRC) $(PYTHON) -m stashdex.rotate --project stashdex
 
 db-up:
 	docker compose -f infra/docker-compose.yml up -d

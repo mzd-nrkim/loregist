@@ -18,7 +18,7 @@ allowed-tools: Bash, Read, Write, Edit, Glob, Grep
 
 `docs_root`: 추론된 프로젝트의 docs_root 값 (`stashdex project list`로 확인)
 
-→ loregist/CLAUDE.md "스킬 공통 — 프로젝트 추론 규칙" 적용
+→ stashdex/CLAUDE.md "스킬 공통 — 프로젝트 추론 규칙" 적용
 
 # 입력 분석
 

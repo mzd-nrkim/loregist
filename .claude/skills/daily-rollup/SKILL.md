@@ -23,9 +23,9 @@ allowed-tools: Bash, Read, Write, Edit, Glob, Grep
 
 ```
 <!-- ROLLUP:START -->
-## loregist
+## stashdex
 
-- [ ] 항목1  ([원본 인덱스](../projects/loregist/dev/{date}/{date}.01.작업문서.md))
+- [ ] 항목1  ([원본 인덱스](../projects/stashdex/dev/{date}/{date}.01.작업문서.md))
 - [ ] 항목2
 
 ## {other-project}
@@ -70,7 +70,7 @@ updated: {YYYY-MM-DD HH:MM}
 
 ## 프로젝트 해석
 
-→ loregist/CLAUDE.md "스킬 공통 — 프로젝트 추론 규칙" 적용
+→ stashdex/CLAUDE.md "스킬 공통 — 프로젝트 추론 규칙" 적용
 
 ## 제약 조건
 

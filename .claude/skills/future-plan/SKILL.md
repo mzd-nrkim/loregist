@@ -15,7 +15,7 @@ PERSONAL_WORK_ROOT=$(stashdex project list | python3 -c "import sys,json; d=json
 
 ## 프로젝트 해석
 
-→ loregist/CLAUDE.md "스킬 공통 — 프로젝트 추론 규칙" 적용
+→ stashdex/CLAUDE.md "스킬 공통 — 프로젝트 추론 규칙" 적용
 
 # 역할
 

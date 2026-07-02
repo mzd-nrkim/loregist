@@ -1,13 +1,13 @@
-# loregist 프로젝트 레지스트리 — 단일 소스
+# stashdex 프로젝트 레지스트리 — 단일 소스
 # 온보딩: 아래에 [projects.<키>] 블록 추가 (경로는 ~/workspace 기준 상대경로, 생략 시 None)
-# 오프보딩: 블록 삭제 + `loregist embed` (또는 DELETE FROM doc_originals WHERE project='<키>')
-# 확인: `loregist project list`
+# 오프보딩: 블록 삭제 + `stashdex embed` (또는 DELETE FROM doc_originals WHERE project='<키>')
+# 확인: `stashdex project list`
 # 키 의미: cold = embed만(rotate 비대상, cold storage 종착지) / done = embed + rotate 대상(파일명 날짜 기준 7일 후 vault/cold/ 이동)
 #
 # 실 파일(projects.toml)은 .gitignore에 등록되어 있습니다.
 # 이 파일을 복사해 projects.toml을 만들고, 실제 경로·프로젝트명으로 수정하세요:
 #   cp projects.toml.example projects.toml
-# 또는 `loregist project add` 로 자동 등록할 수 있습니다.
+# 또는 `stashdex project add` 로 자동 등록할 수 있습니다.
 #
 # ── 선택적 opt-in 키 ───────────────────────────────────────────────────────────
 #

@@ -1,20 +1,20 @@
 # 프로젝트명 고정: 디렉터리(infra/) 기반 자동명('infra')으로 바뀌면
-# 볼륨이 infra_vectordb_data로 새로 생성돼 기존 데이터(loregist_vectordb_data)와 분리된다.
-name: loregist
+# 볼륨이 infra_vectordb_data로 새로 생성돼 기존 데이터(stashdex_vectordb_data)와 분리된다.
+name: stashdex
 
 services:
   vectordb:
     build:
       context: .
       dockerfile: Dockerfile
-    image: loregist-vectordb:pg16-bigm
+    image: stashdex-vectordb:pg16-bigm
     ports:
       - "5433:5432"
     volumes:
       - vectordb_data:/var/lib/postgresql/data
     environment:
-      POSTGRES_DB: loregist
-      POSTGRES_USER: loregist
+      POSTGRES_DB: stashdex
+      POSTGRES_USER: stashdex
       POSTGRES_PASSWORD: vector_local
 volumes:
   vectordb_data:

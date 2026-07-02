@@ -9,11 +9,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 PROJECT_KEY="personal-work"
 
-LOREGIST_SYMLINK="/usr/local/bin/stashdex"
+STASHDEX_SYMLINK="/usr/local/bin/stashdex"
 LAUNCH_AGENT_LABEL="io.stashdex.auto-embed"
 LAUNCH_AGENT_DIR="$HOME/Library/LaunchAgents"
 PLIST_SRC="$REPO_DIR/scripts/examples/auto-embed.plist"
 PLIST_DST="$LAUNCH_AGENT_DIR/${LAUNCH_AGENT_LABEL}.plist"
+ROTATE_LAUNCH_AGENT_LABEL="io.stashdex.auto-rotate"
+ROTATE_PLIST_SRC="$REPO_DIR/scripts/examples/auto-rotate.plist"
+ROTATE_PLIST_DST="$LAUNCH_AGENT_DIR/${ROTATE_LAUNCH_AGENT_LABEL}.plist"
 COMMAND_SRC="$REPO_DIR/scripts/examples/stashdex-journal.command"
 SHORTCUT_SRC="$REPO_DIR/scripts/examples/stashdex-journal.shortcut"
 APPS_DIR="$HOME/Applications"
@@ -40,7 +43,7 @@ setup_venv() {
 # ── C-1: DB(Docker) 기동 ─────────────────────────────────────────────────────
 ensure_db_up() {
   info "C-1: stashdex DB(Docker 컨테이너) 기동 확인 중..."
-  if docker ps --filter name=loregist 2>/dev/null | grep -q loregist; then
+  if docker ps --filter name=stashdex 2>/dev/null | grep -q stashdex; then
     skip "stashdex Docker 컨테이너 이미 가동 중."
     return 0
   fi
@@ -53,7 +56,7 @@ ensure_db_up() {
 warmup_model() {
   info "C-1b: 임베딩 모델 캐시 확인 중..."
   # 캐시 경로: <repo>/models/models--dragonkue--multilingual-e5-small-ko-v2
-  # (src/loregist/embed.py: MODELS_DIR / ("models--" + MODEL_NAME.replace("/", "--")))
+  # (src/stashdex/embed.py: MODELS_DIR / ("models--" + MODEL_NAME.replace("/", "--")))
   local model_cache="$REPO_DIR/models/models--dragonkue--multilingual-e5-small-ko-v2"
   if [[ -d "$model_cache" ]]; then
     skip "임베딩 모델 캐시 이미 존재 ($model_cache)"
@@ -81,8 +84,8 @@ ensure_project() {
 # check_embed_engine 함수는 ensure_db_up으로 격상되어 제거되었습니다.
 
 # ── C-2: stashdex 바이너리 PATH 등록 / 심링크 ────────────────────────────────
-install_loregist_symlink() {
-  info "C-2: stashdex 심링크 설정 중... (대상: $LOREGIST_SYMLINK)"
+install_stashdex_symlink() {
+  info "C-2: stashdex 심링크 설정 중... (대상: $STASHDEX_SYMLINK)"
 
   # 실제 바이너리 위치 자동 탐색 — 우선순위: 레포 루트 래퍼 > .venv/bin > homebrew
   local bin_target=""
@@ -104,29 +107,29 @@ install_loregist_symlink() {
 
   if [[ -z "$bin_target" ]]; then
     warn "stashdex 바이너리를 찾을 수 없습니다. 수동으로 설치 후 재실행하거나 심링크를 직접 생성하세요."
-    warn "  예: sudo ln -sf /path/to/stashdex $LOREGIST_SYMLINK"
+    warn "  예: sudo ln -sf /path/to/stashdex $STASHDEX_SYMLINK"
     return 0
   fi
 
   info "  탐색된 바이너리: $bin_target"
 
   # 이미 동일 심링크가 존재하면 스킵
-  if [[ -L "$LOREGIST_SYMLINK" && "$(readlink "$LOREGIST_SYMLINK")" == "$bin_target" ]]; then
-    skip "심링크 이미 존재 ($LOREGIST_SYMLINK -> $bin_target)"
+  if [[ -L "$STASHDEX_SYMLINK" && "$(readlink "$STASHDEX_SYMLINK")" == "$bin_target" ]]; then
+    skip "심링크 이미 존재 ($STASHDEX_SYMLINK -> $bin_target)"
     return 0
   fi
 
   # 다른 대상 또는 일반 파일이면 교체
-  if [[ -e "$LOREGIST_SYMLINK" || -L "$LOREGIST_SYMLINK" ]]; then
+  if [[ -e "$STASHDEX_SYMLINK" || -L "$STASHDEX_SYMLINK" ]]; then
     info "  기존 항목 제거 후 재생성..."
-    sudo rm -f "$LOREGIST_SYMLINK" 2>/dev/null || true
+    sudo rm -f "$STASHDEX_SYMLINK" 2>/dev/null || true
   fi
 
-  if sudo ln -sf "$bin_target" "$LOREGIST_SYMLINK" 2>/dev/null; then
-    done_ "심링크 생성: $LOREGIST_SYMLINK -> $bin_target"
+  if sudo ln -sf "$bin_target" "$STASHDEX_SYMLINK" 2>/dev/null; then
+    done_ "심링크 생성: $STASHDEX_SYMLINK -> $bin_target"
   else
     warn "심링크 생성 실패 (sudo 권한 없음). 개발자가 수동으로 실행하세요:"
-    warn "  sudo ln -sf $bin_target $LOREGIST_SYMLINK"
+    warn "  sudo ln -sf $bin_target $STASHDEX_SYMLINK"
   fi
 }
 
@@ -155,6 +158,28 @@ install_launch_agent() {
 
   launchctl load "$PLIST_DST"
   done_ "LaunchAgent 로드 완료: $LAUNCH_AGENT_LABEL"
+}
+
+# ── C-3b: auto-rotate LaunchAgent 등록 ───────────────────────────────────────
+install_rotate_launch_agent() {
+  info "C-3b: rotate LaunchAgent 설치 중... ($ROTATE_LAUNCH_AGENT_LABEL)"
+
+  if [[ ! -f "$ROTATE_PLIST_SRC" ]]; then
+    warn "rotate plist 원본 없음: $ROTATE_PLIST_SRC — LaunchAgent 설치 스킵"
+    return 0
+  fi
+
+  mkdir -p "$LAUNCH_AGENT_DIR"
+  cp "$ROTATE_PLIST_SRC" "$ROTATE_PLIST_DST"
+  done_ "rotate plist 복사: $ROTATE_PLIST_DST"
+
+  if launchctl list 2>/dev/null | grep -q "$ROTATE_LAUNCH_AGENT_LABEL"; then
+    info "  기존 rotate LaunchAgent 언로드 후 재로드..."
+    launchctl unload "$ROTATE_PLIST_DST" 2>/dev/null || true
+  fi
+
+  launchctl load "$ROTATE_PLIST_DST"
+  done_ "rotate LaunchAgent 로드 완료: $ROTATE_LAUNCH_AGENT_LABEL"
 }
 
 # ── C-4: .command 배치 ───────────────────────────────────────────────────────
@@ -198,9 +223,9 @@ install_memo_command() {
   local tmp_memo
   tmp_memo="$(mktemp /tmp/stashdex-memo-XXXXXX.command)"
 
-  # PROJECT_KEY와 LOREGIST_BIN 두 변수 치환 (stashdex-memo.command는 Python 파일이므로 Python 변수 형식 치환)
+  # PROJECT_KEY와 STASHDEX_BIN 두 변수 치환 (stashdex-memo.command는 Python 파일이므로 Python 변수 형식 치환)
   sed -e "s|PROJECT_KEY = \".*\"|PROJECT_KEY = \"$PROJECT_KEY\"|g" \
-      -e "s|LOREGIST_BIN = \".*\"|LOREGIST_BIN = \"$LOREGIST_SYMLINK\"|g" \
+      -e "s|STASHDEX_BIN = \".*\"|STASHDEX_BIN = \"$STASHDEX_SYMLINK\"|g" \
       "$memo_cmd_src" > "$tmp_memo"
   chmod +x "$tmp_memo"
   mv "$tmp_memo" "$memo_cmd_dst"
@@ -233,7 +258,7 @@ main() {
   ensure_db_up
   echo ""
 
-  install_loregist_symlink
+  install_stashdex_symlink
   echo ""
 
   warmup_model
@@ -243,6 +268,9 @@ main() {
   echo ""
 
   install_launch_agent
+  echo ""
+
+  install_rotate_launch_agent
   echo ""
 
   install_command

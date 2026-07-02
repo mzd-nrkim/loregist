@@ -3,8 +3,8 @@ import sys
 
 import yaml
 
-from loregist.config import PROJECTS
-from loregist.search import embed_query, search_fts, search_hybrid, search_vector
+from stashdex.config import PROJECTS
+from stashdex.search import embed_query, search_fts, search_hybrid, search_vector
 
 
 def _hit(rows: list[dict], expected_paths: list[str], top_k: int = 5) -> bool:

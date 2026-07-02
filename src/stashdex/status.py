@@ -4,9 +4,9 @@ import argparse
 import json
 import sys
 
-from loregist.config import PROJECTS, get_db_connection
-from loregist import tui
-from loregist import drift as _drift
+from stashdex.config import PROJECTS, get_db_connection
+from stashdex import tui
+from stashdex import drift as _drift
 
 
 def run_status(conn, *, project_filter: "str | None" = None) -> None:

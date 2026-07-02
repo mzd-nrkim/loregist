@@ -7,8 +7,8 @@ import calendar
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
-from loregist.config import PROJECTS, get_db_connection, infer_project
-from loregist.embed import load_embedder
+from stashdex.config import PROJECTS, get_db_connection, infer_project
+from stashdex.embed import load_embedder
 
 
 def _rows_to_dicts(rows) -> list[dict]:
@@ -636,7 +636,7 @@ def search_files_agentic(query: str, project: str) -> list[dict]:
     """파일 기반 agentic 검색. claude subprocess를 기동해 폴더에서 관련 내용을 찾는다."""
     import subprocess
     import os
-    from loregist import auto_update
+    from stashdex import auto_update
 
     folders = get_search_file_folders(project)
     if not folders:
@@ -644,7 +644,7 @@ def search_files_agentic(query: str, project: str) -> list[dict]:
 
     argv = auto_update.build_search_command(query, folders)
     child_env = os.environ.copy()
-    child_env["LOREGIST_AUTO_GUARD"] = "1"
+    child_env["STASHDEX_AUTO_GUARD"] = "1"
     try:
         proc = subprocess.run(argv, env=child_env, capture_output=True, text=True, timeout=120)
     except (FileNotFoundError, OSError):
@@ -872,6 +872,35 @@ def format_results(rows: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def _resolve_project_or_fallback(args, *, is_tty_out: bool, is_tty_in: bool):
+    """추론 실패 시 전체검색 fallback 또는 사용자 확인 분기.
+
+    Returns (project_key, all_projects) — caller sets args.all_projects.
+    Raises SystemExit on user refusal or empty PROJECTS.
+    """
+    if not PROJECTS:
+        print("오류: 등록된 프로젝트가 없습니다. projects.toml을 확인하세요.", file=sys.stderr)
+        sys.exit(1)
+
+    base_project = next(iter(PROJECTS))
+
+    if args.all_projects:
+        return base_project, True
+
+    if is_tty_out and is_tty_in and not args.no_interactive and not args.json:
+        try:
+            answer = input("기준 프로젝트를 못 찾음. 전체 프로젝트로 검색할까요? [Y/n] ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            answer = "n"
+        if answer in ("", "y", "yes"):
+            return base_project, True
+        print("중단. --project <이름> 또는 --all-projects 를 사용하세요.", file=sys.stderr)
+        sys.exit(1)
+
+    print("프로젝트 추론 실패. 비대화형 환경이므로 전체 프로젝트로 자동 검색합니다.", file=sys.stderr)
+    return base_project, True
+
+
 def main():
     parser = argparse.ArgumentParser(description="문서 검색 (vector/fts/like/hybrid)")
     parser.add_argument("query", nargs="?", help="검색어 (--eval 시 불필요)")
@@ -932,7 +961,7 @@ def main():
     args = parser.parse_args()
 
     if args.eval:
-        from loregist.search_eval import run_eval
+        from stashdex.search_eval import run_eval
         with get_db_connection() as conn:
             ret = run_eval(conn, args.golden, rrf_k=args.rrf_k)
         sys.exit(ret)
@@ -940,13 +969,20 @@ def main():
     if not args.query:
         parser.error("query 인자가 필요합니다. (--eval 없이 실행 시)")
 
-    project = infer_project(explicit=args.project)
+    is_tty_out = sys.stdout.isatty()
+    is_tty_in = sys.stdin.isatty()
+    try:
+        project = infer_project(explicit=args.project)
+    except ValueError:
+        project, args.all_projects = _resolve_project_or_fallback(
+            args, is_tty_out=is_tty_out, is_tty_in=is_tty_in
+        )
     if project not in PROJECTS:
         print(f"오류: 미등록 프로젝트 '{project}'. projects.toml에 추가하세요.", file=sys.stderr)
         sys.exit(1)
 
     # 검색 이력 로드 (TTY + --no-history 아닐 때만)
-    is_tty = sys.stdout.isatty()
+    is_tty = is_tty_out
     if is_tty and not args.no_history:
         load_history()
 
@@ -991,7 +1027,7 @@ def main():
                 rich=rich,
             )
         elif rich:
-            from loregist import tui
+            from stashdex import tui
             spinner = tui.Spinner(enabled=True)
             rows = run_search_staged(conn, args.mode, project, args.query, top_k=args.top_k,
                                      all_projects=args.all_projects, min_score=args.min_score,
@@ -1029,11 +1065,11 @@ def main():
 
         # 3-7: 결과 렌더
         if rich:
-            from loregist import tui
+            from stashdex import tui
             # 컨텍스트 청크 수집 (--no-context 아닐 때)
             context_chunks = None
             if not args.no_context and rows:
-                from loregist.tui import _group_by_doc
+                from stashdex.tui import _group_by_doc
                 grouped_for_ctx = _group_by_doc(rows)
                 context_chunks = {}
                 for g in grouped_for_ctx:
@@ -1054,7 +1090,7 @@ def main():
         if args.open_n is not None:
             # --open N: N번 즉시 열고 종료 (루프 없음)
             if rich and grouped:
-                from loregist import tui
+                from stashdex import tui
                 idx = args.open_n - 1
                 if 0 <= idx < len(grouped):
                     ok, msg = tui.open_path(grouped[idx]["path"])
@@ -1066,7 +1102,7 @@ def main():
                     print(f"범위 오류: {args.open_n}번 결과가 없습니다.", file=sys.stderr)
             elif rows:
                 # non-rich 모드에서도 --open 지원
-                from loregist import tui as _tui
+                from stashdex import tui as _tui
                 grp = _tui._group_by_doc(rows)
                 idx = args.open_n - 1
                 if 0 <= idx < len(grp):
@@ -1078,7 +1114,7 @@ def main():
                 else:
                     print(f"범위 오류: {args.open_n}번 결과가 없습니다.", file=sys.stderr)
         elif rich and grouped and not args.no_interactive and sys.stdin.isatty():
-            from loregist import tui
+            from stashdex import tui
             tui.prompt_open(grouped, conn)
 
 

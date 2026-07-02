@@ -6,10 +6,10 @@ import sys
 import time
 from pathlib import Path
 
-from loregist.config import PROJECTS, MODELS_DIR, MODEL_NAME, WORKSPACE, DEFAULT_EXTENSIONS, get_db_connection, infer_project
-from loregist.chunking import hash_file, hash_chunk, split_md, split_log
-from loregist import drift as _drift
-from loregist import auto_update
+from stashdex.config import PROJECTS, MODELS_DIR, MODEL_NAME, WORKSPACE, DEFAULT_EXTENSIONS, get_db_connection, infer_project
+from stashdex.chunking import hash_file, hash_chunk, split_md, split_log
+from stashdex import drift as _drift
+from stashdex import auto_update
 
 _embedder = None
 
@@ -32,7 +32,7 @@ def load_embedder():
         warnings.filterwarnings("ignore", module="huggingface_hub")
         os.environ.setdefault("HF_HUB_DISABLE_IMPLICIT_TOKEN", "1")
         # 기업망 SSL inspection 우회 (huggingface_hub / httpx) — 모델 다운로드 시에만 적용
-        if os.environ.get("LOREGIST_NO_SSL_VERIFY", "1") == "1":
+        if os.environ.get("STASHDEX_NO_SSL_VERIFY", "1") == "1":
             import httpx as _httpx
             _orig_httpx_init = _httpx.Client.__init__
             def _httpx_no_verify(self, *a, **kw):
@@ -62,6 +62,7 @@ def embed_documents(texts: list[str]) -> list[list[float]]:
 def discover_embed_files(project: str, include_today: bool = False) -> list[tuple[str, str]]:
     cfg = PROJECTS[project]
     files: list[tuple[str, str]] = []
+    seen: set[str] = set()  # 전역 dedup: vault∩done∩cold∩docs_root 중복 경로 재수집 방지
     today = datetime.date.today().strftime("%Y-%m-%d")
     extensions = cfg.get("extensions", DEFAULT_EXTENSIONS[:])
 
@@ -78,7 +79,10 @@ def discover_embed_files(project: str, include_today: bool = False) -> list[tupl
         for ext in extensions:
             collected.extend(vault.rglob(f"*.{ext}"))
         for p in sorted(set(collected)):
-            files.append((str(p), _kind(p)))
+            ps = str(p)
+            if ps not in seen:
+                seen.add(ps)
+                files.append((ps, _kind(p)))
 
     # done/cold (done=rotate 대기 완료문서, cold=cold storage 종착지)
     for key in ("done", "cold"):
@@ -88,7 +92,10 @@ def discover_embed_files(project: str, include_today: bool = False) -> list[tupl
             for ext in extensions:
                 collected.extend(path.rglob(f"*.{ext}"))
             for p in sorted(set(collected)):
-                files.append((str(p), _kind(p)))
+                ps = str(p)
+                if ps not in seen:
+                    seen.add(ps)
+                    files.append((ps, _kind(p)))
 
     # docs_root (날짜 폴더 안·_wiki 하위 포함, 오늘 폴더 기본 제외)
     docs_root: Path | None = cfg["docs_root"]
@@ -97,28 +104,32 @@ def discover_embed_files(project: str, include_today: bool = False) -> list[tupl
         for ext in extensions:
             collected.extend(docs_root.rglob(f"*.{ext}"))
         for p in sorted(set(collected)):
+            ps = str(p)
+            if ps in seen:
+                continue
             rel = p.relative_to(docs_root)
             parts = rel.parts
             if len(parts) >= 2:
                 if parts[0] == "_wiki":
-                    files.append((str(p), "catalog"))
+                    seen.add(ps)
+                    files.append((ps, "catalog"))
                 elif include_today or parts[0] != today:
-                    files.append((str(p), _kind(p)))
+                    seen.add(ps)
+                    files.append((ps, _kind(p)))
 
     # handbook (분산 파일 목록 — _parse_handbook_sources가 이미 개별 파일로 확장)
     handbook_sources: list = cfg.get("handbook", [])
     if handbook_sources:
-        existing_paths = {p for p, _ in files}  # 기존 수집 경로 set (vault/done/cold/docs_root 결과)
         for entry in handbook_sources:
             p: Path = entry["path"]
             if not p.exists():  # B-1-2: 존재하지 않는 경로 스킵
                 continue
             path_str = str(p)
-            if path_str not in existing_paths:  # B-1-3: 중복 제거 (기존 스캔 우선)
+            if path_str not in seen:  # B-1-3: 중복 제거 (전역 seen-set, 기존 스캔 우선)
+                seen.add(path_str)
                 files.append((path_str, "handbook"))  # B-1-4
-                existing_paths.add(path_str)
 
-    return files
+    return [(str(Path(p).resolve()), k) for p, k in files]
 
 
 def upsert_original(conn, project: str, path: str, kind: str, text: str, file_hash: str) -> int:
@@ -164,6 +175,50 @@ def load_existing_hashes(conn, project: str) -> dict[str, str]:
         (project,),
     )
     return {row[0]: row[1] for row in cur.fetchall()}
+
+
+def prune_orphans(conn, project: str, dry_run: bool = False) -> list[str]:
+    """DB에서 project의 고아 행(파일이 존재하지 않는 source_path)을 정리한다.
+
+    dry_run=True이면 삭제 없이 후보 목록만 반환.
+    dry_run=False이면 트랜잭션 내에서 doc_chunks → doc_originals 순으로 삭제.
+    반환: 삭제된(또는 dry_run 시 후보) source_path 목록.
+    """
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT source_path FROM doc_originals WHERE project = %s",
+        (project,),
+    )
+    all_paths = [row[0] for row in cur.fetchall()]
+    total = len(all_paths)
+
+    orphans = [
+        sp for sp in all_paths
+        if not Path(sp).is_absolute() or not Path(sp).exists()
+    ]
+
+    if not orphans:
+        return []
+
+    if len(orphans) > total * 0.5:
+        print(
+            f"[prune] 과다 삭제 경고: orphan {len(orphans)}/{total} "
+            f"({len(orphans) / total * 100:.0f}%) — 계속 진행"
+        )
+
+    if dry_run:
+        return orphans
+
+    cur.execute(
+        "DELETE FROM doc_chunks WHERE project = %s AND source_path = ANY(%s)",
+        (project, orphans),
+    )
+    cur.execute(
+        "DELETE FROM doc_originals WHERE project = %s AND source_path = ANY(%s)",
+        (project, orphans),
+    )
+    conn.commit()
+    return orphans
 
 
 def write_embed_log(
@@ -213,12 +268,13 @@ def embed_file(conn, project: str, path: str) -> None:
 
     fhash = hash_file(path)
     text = p.read_text(encoding="utf-8", errors="replace")
-    original_id = upsert_original(conn, project, path, kind, text, fhash)
+    source_path = str(Path(path).resolve())
+    original_id = upsert_original(conn, project, source_path, kind, text, fhash)
 
     chunks = split_log(text) if kind == "log" else split_md(text)
     if chunks:
         embeddings = embed_documents(chunks)
-        insert_chunks(conn, original_id, project, path, kind, chunks, embeddings)
+        insert_chunks(conn, original_id, project, source_path, kind, chunks, embeddings)
 
     conn.commit()
 
@@ -313,6 +369,10 @@ def main():
                 print(f"  [오류] {path}: {e}")
                 errors += 1
 
+        if conn is not None:
+            pruned = prune_orphans(conn, project, dry_run=args.dry_run)
+            print(f"[prune] pruned={len(pruned)}")
+
     elapsed = time.time() - start
     n = len(files)
 
@@ -346,7 +406,7 @@ def main():
         catalog_on = PROJECTS[project].get("auto_catalog_update", False)
         entry = auto_update.should_auto_launch(os.environ, handbook_on, catalog_on, len(drift_paths))
         if entry:
-            cwd = os.environ.get("LOREGIST_CWD", os.getcwd())
+            cwd = os.environ.get("STASHDEX_CWD", os.getcwd())
             result = auto_update.launch_headless(entry, project, cwd)
             auto_update.report_log(result)
     except Exception:

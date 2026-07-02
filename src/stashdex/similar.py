@@ -4,10 +4,10 @@ import argparse
 import sys
 from pathlib import Path
 
-from loregist.config import get_db_connection
-from loregist.embed import load_embedder
-from loregist.search import search_vector
-from loregist import tui
+from stashdex.config import get_db_connection
+from stashdex.embed import load_embedder
+from stashdex.search import search_vector
+from stashdex import tui
 
 
 def run_similar(path: str, top_k: int = 6) -> None:

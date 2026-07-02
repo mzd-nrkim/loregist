@@ -230,7 +230,7 @@ flowchart LR
 
 | 항목 | 내용 |
 |---|---|
-| DB | PostgreSQL 16 + pgvector + pg_bigm, port **5433**, db/user `loregist`/`loregist`. `doc_chunks`는 `created_at` 월별 RANGE 파티셔닝 |
+| DB | PostgreSQL 16 + pgvector + pg_bigm, port **5433**, db/user `stashdex`/`stashdex`. `doc_chunks`는 `created_at` 월별 RANGE 파티셔닝 |
 | 임베딩 모델 | `dragonkue/multilingual-e5-small-ko-v2` (384 dims, ~450MB, 한국어 특화 fine-tune) |
 | 검색 모드 | `hybrid` (RRF 융합 기본) / `vector` / `fts` / `like` — hybrid가 골든셋 80% vs 단독 40~60% |
 | 검색 전략 | `--strategy` single(기본)/cascade/fusion/speculative — wiki→hot→cold 콘텐츠 계층 다단계 탐색(`--recency-boost` 활성 시 hot→wiki→cold 로 역전). `--tier`로 시간 윈도우(m1~m12) 조절 |
@@ -243,32 +243,32 @@ flowchart LR
 | 파일 | 역할 |
 |---|---|
 | `projects.toml` | 프로젝트 레지스트리 단일 소스 — `[projects.<키>]` 블록으로 온보딩/오프보딩 |
-| `src/loregist/config.py` | DB 접속·모델·`projects.toml` 로드 → `PROJECTS` dict, `infer_project()`, `get_db_connection()` |
-| `src/loregist/chunking.py` | `split_md`(`##`/`###` 기준), `split_log`(빈 줄 기준). MIN 100 / MAX 1500자 merge·split |
-| `src/loregist/embed.py` | 파일 스캔 → 원문 upsert → 청크 임베딩 → `doc_chunks` insert |
-| `src/loregist/search.py` | 쿼리 임베딩 → cosine top-k (`WHERE project=` 스코프), RRF hybrid, `--strategy`/`--tier` 다단계 cascade (`search_tiered`/`search_multistep`) |
-| `src/loregist/search_eval.py` | 골든셋 기반 검색 정확도 평가 (`search --eval --golden`) |
-| `src/loregist/tui.py` | TTY 출력 UX — braille 스피너 + 색상 카드 + 번호 입력 오픈. 비-TTY에선 off |
-| `src/loregist/rotate.py` | `docs/dev/` → vault 이동 (라이프사이클 관리, extensions 기반) |
-| `src/loregist/journal.py` | 날짜별 로그 파일에 타임스탬프 메시지 append |
-| `src/loregist/watch.py` | 디렉터리 감시 → 파일 변경 시 자동 embed |
-| `src/loregist/catalog_gen.py` | `_wiki/TOPICS.md`·`DECISIONS.md` 자동 생성·갱신, `--lint`로 edges 무결성 검사 |
-| `src/loregist/similar.py` | 지정 파일과 벡터 유사도 높은 과거 문서 검색 (전 프로젝트) |
-| `src/loregist/vault_cleanup.py` | vault/cold 파일 DB 대조 후 정리 (`vault_cleanup` opt-in, `--apply` 명시 필수) |
-| `src/loregist/status.py` | 프로젝트별 임베딩 현황·최종 임베딩 시각·vault 경로 대시보드 |
-| `src/loregist/warmup.py` | 임베딩 모델 사전 다운로드·캐시 (최초 1회, ~450MB) |
-| `src/loregist/auto_update.py` | 세션 밖 자동 갱신 — embed 후 drift 시 headless Claude 기동 (LaunchAgent/cron) |
-| `src/loregist/drift.py` | embed 이후 handbook catalog drift 식별 헬퍼 |
-| `src/loregist/onboard.py` | 프로젝트 온보딩 마법사 (`stashdex project add`) |
-| `src/loregist/onboard_input.py` | 온보딩 마법사 대화형 입력 헬퍼 |
-| `src/loregist/project_cmd.py` | `stashdex project list/current/add` 서브커맨드 디스패처 |
-| `src/loregist/handbook_stamp.py` | `.last_handbook_update` 스탬프 규칙 코드 강제 (40자 SHA·ISO 검증, 반영 1건↑ 시에만 기록) |
+| `src/stashdex/config.py` | DB 접속·모델·`projects.toml` 로드 → `PROJECTS` dict, `infer_project()`, `get_db_connection()` |
+| `src/stashdex/chunking.py` | `split_md`(`##`/`###` 기준), `split_log`(빈 줄 기준). MIN 100 / MAX 1500자 merge·split |
+| `src/stashdex/embed.py` | 파일 스캔 → 원문 upsert → 청크 임베딩 → `doc_chunks` insert |
+| `src/stashdex/search.py` | 쿼리 임베딩 → cosine top-k (`WHERE project=` 스코프), RRF hybrid, `--strategy`/`--tier` 다단계 cascade (`search_tiered`/`search_multistep`) |
+| `src/stashdex/search_eval.py` | 골든셋 기반 검색 정확도 평가 (`search --eval --golden`) |
+| `src/stashdex/tui.py` | TTY 출력 UX — braille 스피너 + 색상 카드 + 번호 입력 오픈. 비-TTY에선 off |
+| `src/stashdex/rotate.py` | `docs/dev/` → vault 이동 (라이프사이클 관리, extensions 기반) |
+| `src/stashdex/journal.py` | 날짜별 로그 파일에 타임스탬프 메시지 append |
+| `src/stashdex/watch.py` | 디렉터리 감시 → 파일 변경 시 자동 embed |
+| `src/stashdex/catalog_gen.py` | `_wiki/TOPICS.md`·`DECISIONS.md` 자동 생성·갱신, `--lint`로 edges 무결성 검사 |
+| `src/stashdex/similar.py` | 지정 파일과 벡터 유사도 높은 과거 문서 검색 (전 프로젝트) |
+| `src/stashdex/vault_cleanup.py` | vault/cold 파일 DB 대조 후 정리 (`vault_cleanup` opt-in, `--apply` 명시 필수) |
+| `src/stashdex/status.py` | 프로젝트별 임베딩 현황·최종 임베딩 시각·vault 경로 대시보드 |
+| `src/stashdex/warmup.py` | 임베딩 모델 사전 다운로드·캐시 (최초 1회, ~450MB) |
+| `src/stashdex/auto_update.py` | 세션 밖 자동 갱신 — embed 후 drift 시 headless Claude 기동 (LaunchAgent/cron) |
+| `src/stashdex/drift.py` | embed 이후 handbook catalog drift 식별 헬퍼 |
+| `src/stashdex/onboard.py` | 프로젝트 온보딩 마법사 (`stashdex project add`) |
+| `src/stashdex/onboard_input.py` | 온보딩 마법사 대화형 입력 헬퍼 |
+| `src/stashdex/project_cmd.py` | `stashdex project list/current/add` 서브커맨드 디스패처 |
+| `src/stashdex/handbook_stamp.py` | `.last_handbook_update` 스탬프 규칙 코드 강제 (40자 SHA·ISO 검증, 반영 1건↑ 시에만 기록) |
 | `hooks/block_readonly_handbook.py` | writable=false handbook 파일 편집 차단 훅 (PreToolUse) |
 | `hooks/post_embed_drift.py` | embed 완료 후 drift 감지·자동 갱신 트리거 훅 (PostToolUse) |
 | `hooks/post-commit` | 커밋 후 자동 embed/catalog 갱신 트리거 (git 훅) |
 | `scripts/audit.sh` | 민감정보 유출 검사 (pre-commit·CI 공용) |
 | `scripts/install-nondev-kit.sh` | 간편 키트 설치 (Shortcuts·launchd 자동화 포함) |
-| `stashdex` | PATH 래퍼 바이너리 (`LOREGIST_CWD`로 호출 위치 전달) |
+| `stashdex` | PATH 래퍼 바이너리 (`STASHDEX_CWD`로 호출 위치 전달) |
 | `infra/docker-compose.yml` | pgvector 컨테이너 (port 5433, Airflow metaDB와 분리) |
 | `infra/Dockerfile` | pgvector pg16 베이스에 `pg_bigm`(v1.2)을 빌드·설치한 커스텀 이미지 |
 | `infra/init.sql` | `doc_originals` / `doc_chunks` 스키마. `doc_chunks`는 `created_at` 월별 RANGE 파티셔닝 (`vector`·`pg_bigm` 확장) |
@@ -313,6 +313,34 @@ flowchart TB
 - `doc_originals.full_text`에 전문 보관 → vault 삭제 후에도 복원 가능.
 - `cold` 경로는 rotate 비대상 — 이미 cold storage 종착지, embed만 대상.
 
+## git을 어떻게 쓰는가
+
+stashdex는 git을 **변경 추적의 기준점·트리거**로 사용한다 — 데이터를 git에 저장하는 것이 아니라, git 히스토리를 기준으로 "무엇이 바뀌었는가"를 판단하고 후속 동작을 트리거한다.
+
+> **핵심 비대칭**: git 히스토리 = 트리거·기준점 / 데이터 원본 = DB(pgvector) · 외부 vault(logvault/)
+
+### git 사용 5개 지점
+
+| 구현 파일 | git 명령 | 목적 |
+|---|---|---|
+| `src/stashdex/rotate.py:209` | `git ls-files --error-unmatch` / `git rm` | vault 이동 후 repo 측 파일을 git 추적에서 제거 |
+| `src/stashdex/drift.py:88` | `git show -s --format=%cI <sha>` | 스탬프 SHA → 커밋시각으로 변환해 handbook mtime 비교 기준 산출 |
+| `.claude/skills/handbook-update/SKILL.md` | `git diff --stat` / `git diff <sha> HEAD --name-only` | 변경된 파일 감지로 handbook/catalog 섹션 갱신 여부 판단 |
+| `hooks/post-commit:6` | `git diff --name-only HEAD~1 HEAD` | 커밋된 변경 파일 목록으로 증분 embed 트리거 |
+| `src/stashdex/auto_update.py:374` | `git status --porcelain` | 무인 갱신 후 dirty 상태 감사·검증 |
+
+### 설계 의도
+
+**① vault가 git 비대상인 이유**: vault(`logvault/`)는 repo 외부에 두어 git 추적 대상이 아니다. rotate 시 repo 안의 원본 파일이 `git rm`으로 제거되어 git 히스토리에는 "파일 삭제" 이벤트만 남는다. 원본 데이터는 pgvector(`doc_originals.full_text`)에 전문 보관되어 vault 삭제 후에도 검색·복원이 가능하다.
+
+**② 스탬프 SHA → 커밋시각 drift 메커니즘**: `handbook_stamp.py`가 handbook 갱신 시 마지막 커밋 SHA를 스탬프로 기록한다. `drift.py`는 `git show -s --format=%cI <sha>`로 해당 커밋 시각을 조회하고, 그 이후 관련 소스 파일이 변경됐으면 handbook이 stale(drift)하다고 판단한다(`src/stashdex/drift.py:88`).
+
+**③ handbook-update의 push/merge 금지**: `handbook-update`·`catalog-update` 스킬은 내용 갱신 후 commit을 만들 수 있지만(`--commit` 옵션), `push`나 `merge`는 수행하지 않는다. commit이 생기면 `hooks/post-commit`이 즉시 증분 embed를 트리거해 검색 인덱스를 갱신한다. push/merge는 메인 에이전트(사용자 세션)가 담당한다.
+
+### 비-git 환경 폴백
+
+스탬프가 40자리 hex SHA이면 `git show -s --format=%cI`로 커밋 시각을 조회한다. 그 외(ISO 8601 문자열 등)이면 `datetime.fromisoformat()`으로 직접 파싱한다(`src/stashdex/drift.py:96–99`). 파싱 실패 시 `reference=None`으로 처리해 전체 drift로 판단한다. 따라서 git이 없는 환경에서도 ISO 8601 타임스탬프를 스탬프로 사용하면 drift 기능이 동작한다 — git은 hard requirement가 아니다.
+
 ## Claude Code 스킬
 
 스킬은 stashdex 검색 계층의 **소비(automation) 레이어**이자 **문서 작성 도우미**다. 원시 텍스트(`*.log` / `*.md` / `*.txt`)를 구조화된 작업문서로 변환하고, 그 문서에서 지식을 증류하는 파이프라인을 자동화한다. 텍스트로 기록하지 않으면 스킬이 참조할 과거 이력이 없다 — 로그화 → embed → 스킬 활용은 하나의 루프다([데이터 플로우](#데이터-플로우-전체) 참조).
@@ -350,8 +378,8 @@ flowchart LR
 ## 디렉터리 구조
 
 ```
-loregist/
-├── src/loregist/      # Python 패키지 (config, embed, search, rotate, chunking, tui, ...)
+stashdex/
+├── src/stashdex/      # Python 패키지 (config, embed, search, rotate, chunking, tui, ...)
 ├── hooks/              # Claude Code 훅 (block_readonly_handbook.py, post_embed_drift.py)
 ├── infra/              # Docker Compose + init.sql 스키마
 ├── models/             # 임베딩 모델 캐시 (multilingual-e5-small-ko-v2, ~450MB)

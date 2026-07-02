@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""PostToolUse hook: loregist embed 실행 후 drift 발생 시 handbook 갱신 리마인더 주입.
+"""PostToolUse hook: stashdex embed 실행 후 drift 발생 시 handbook 갱신 리마인더 주입.
 
-Claude Code가 Bash 도구로 `loregist embed`(내용변경성) 명령을 실행한 직후 이 hook이
+Claude Code가 Bash 도구로 `stashdex embed`(내용변경성) 명령을 실행한 직후 이 hook이
 실행된다. stdin으로 JSON 입력(tool_name, tool_input, tool_response 등)을 받아
 drift가 존재하고 세션 안이면 리마인더를 stdout JSON으로 출력한다.
 
@@ -20,7 +20,7 @@ import re
 import sys
 from pathlib import Path
 
-# loregist 패키지 경로를 sys.path에 추가 (hook은 임의 cwd에서 실행될 수 있음)
+# stashdex 패키지 경로를 sys.path에 추가 (hook은 임의 cwd에서 실행될 수 있음)
 _HOOK_DIR = Path(__file__).resolve().parent
 _REPO_ROOT = _HOOK_DIR.parent
 _SRC_DIR = _REPO_ROOT / "src"
@@ -28,34 +28,34 @@ if str(_SRC_DIR) not in sys.path:
     sys.path.insert(0, str(_SRC_DIR))
 
 # projects.toml 위치를 환경변수로 강제 지정 (미설정이면 기본값 사용)
-# 탐색 순서: 환경변수 LOREGIST_PROJECTS_FILE → repo 루트의 projects.toml
+# 탐색 순서: 환경변수 STASHDEX_PROJECTS_FILE → repo 루트의 projects.toml
 _DEFAULT_PROJECTS_TOML = _REPO_ROOT / "projects.toml"
 
-if not os.environ.get("LOREGIST_PROJECTS_FILE"):
+if not os.environ.get("STASHDEX_PROJECTS_FILE"):
     if _DEFAULT_PROJECTS_TOML.exists():
-        os.environ["LOREGIST_PROJECTS_FILE"] = str(_DEFAULT_PROJECTS_TOML)
+        os.environ["STASHDEX_PROJECTS_FILE"] = str(_DEFAULT_PROJECTS_TOML)
 
 # ─────────────────────────────────────────────────────────────
 # 내용변경성 embed 서브커맨드 매칭 패턴 (D-5: 읽기전용 제외)
-# loregist embed ... 만 매칭; search/status/project list 제외
+# stashdex embed ... 만 매칭; search/status/project list 제외
 # ─────────────────────────────────────────────────────────────
 _EMBED_PATTERN = re.compile(
-    r"(?:^|\s)loregist\s+embed(?:\s|$)",
+    r"(?:^|\s)stashdex\s+embed(?:\s|$)",
     re.MULTILINE,
 )
 
 # 읽기전용 서브커맨드 패턴 — 이것이 매칭되면 embed이더라도 제외 (방어적 체크)
 _READONLY_PATTERN = re.compile(
-    r"(?:^|\s)loregist\s+(?:search|status|project\s+list)(?:\s|$)",
+    r"(?:^|\s)stashdex\s+(?:search|status|project\s+list)(?:\s|$)",
     re.MULTILINE,
 )
 
 
 def _is_content_changing_embed(command: str) -> bool:
-    """command가 내용변경성 loregist embed 호출인지 판정한다.
+    """command가 내용변경성 stashdex embed 호출인지 판정한다.
 
-    - loregist embed 포함 → True
-    - loregist search / status / project list 포함 → False (읽기전용, D-5)
+    - stashdex embed 포함 → True
+    - stashdex search / status / project list 포함 → False (읽기전용, D-5)
     - 그 외 → False
     """
     if not _EMBED_PATTERN.search(command):
@@ -106,7 +106,7 @@ def decide_reminder(
     if tool_name != "Bash":
         return None
 
-    # 2. 내용변경성 loregist embed 가 아니면 무시
+    # 2. 내용변경성 stashdex embed 가 아니면 무시
     if not _is_content_changing_embed(command):
         return None
 
@@ -119,7 +119,7 @@ def decide_reminder(
         return None
 
     # 5. 플래그 조합 → 진입 스킬 결정
-    from loregist.config import decide_entry_skill
+    from stashdex.config import decide_entry_skill
 
     entry = decide_entry_skill(handbook_on, catalog_on)
 
@@ -193,13 +193,13 @@ def main():
         if not in_session:
             sys.exit(0)
 
-        # loregist config, drift 임포트
+        # stashdex config, drift 임포트
         try:
-            from loregist import config
-            from loregist.drift import compute_drift
+            from stashdex import config
+            from stashdex.drift import compute_drift
         except Exception as e:
             print(
-                "[post_embed_drift] loregist 임포트 실패 (fail-open): {}".format(e),
+                "[post_embed_drift] stashdex 임포트 실패 (fail-open): {}".format(e),
                 file=sys.stderr,
             )
             sys.exit(0)
@@ -207,7 +207,7 @@ def main():
         # 프로젝트 추론
         try:
             explicit_project = _parse_project_from_command(command)
-            cwd = os.environ.get("LOREGIST_CWD") or os.getcwd()
+            cwd = os.environ.get("STASHDEX_CWD") or os.getcwd()
             project_name = config.infer_project(cwd=cwd, explicit=explicit_project)
         except Exception as e:
             print(

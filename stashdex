@@ -18,47 +18,47 @@ export PYTHONPATH="$SCRIPT_DIR/src"
 subcmd="$1"
 shift
 
-export LOREGIST_CWD="$PWD"
+export STASHDEX_CWD="$PWD"
 
 case "$subcmd" in
   embed)
-    cd "$SCRIPT_DIR" && exec "$PYTHON" -m loregist.embed "$@"
+    cd "$SCRIPT_DIR" && exec "$PYTHON" -m stashdex.embed "$@"
     ;;
   search)
-    cd "$SCRIPT_DIR" && exec "$PYTHON" -m loregist.search "$@"
+    cd "$SCRIPT_DIR" && exec "$PYTHON" -m stashdex.search "$@"
     ;;
   project)
-    cd "$SCRIPT_DIR" && exec "$PYTHON" -m loregist.project_cmd "$@"
+    cd "$SCRIPT_DIR" && exec "$PYTHON" -m stashdex.project_cmd "$@"
     ;;
   rotate)
-    cd "$SCRIPT_DIR" && exec "$PYTHON" -m loregist.rotate "$@"
+    cd "$SCRIPT_DIR" && exec "$PYTHON" -m stashdex.rotate "$@"
     ;;
   status)
-    cd "$SCRIPT_DIR" && exec "$PYTHON" -m loregist.status "$@"
+    cd "$SCRIPT_DIR" && exec "$PYTHON" -m stashdex.status "$@"
     ;;
   similar)
-    cd "$SCRIPT_DIR" && exec "$PYTHON" -m loregist.similar "$@"
+    cd "$SCRIPT_DIR" && exec "$PYTHON" -m stashdex.similar "$@"
     ;;
   vault-cleanup)
-    cd "$SCRIPT_DIR" && exec "$PYTHON" -m loregist.vault_cleanup "$@"
+    cd "$SCRIPT_DIR" && exec "$PYTHON" -m stashdex.vault_cleanup "$@"
     ;;
   catalog-init)
-    cd "$SCRIPT_DIR" && exec "$PYTHON" -m loregist.catalog_gen init "$@"
+    cd "$SCRIPT_DIR" && exec "$PYTHON" -m stashdex.catalog_gen init "$@"
     ;;
   catalog)
-    cd "$SCRIPT_DIR" && exec "$PYTHON" -m loregist.catalog_gen run "$@"
+    cd "$SCRIPT_DIR" && exec "$PYTHON" -m stashdex.catalog_gen run "$@"
     ;;
   warmup)
-    cd "$SCRIPT_DIR" && exec "$PYTHON" -m loregist.warmup "$@"
+    cd "$SCRIPT_DIR" && exec "$PYTHON" -m stashdex.warmup "$@"
     ;;
   journal)
-    cd "$SCRIPT_DIR" && exec "$PYTHON" -m loregist.journal "$@"
+    cd "$SCRIPT_DIR" && exec "$PYTHON" -m stashdex.journal "$@"
     ;;
   memo)
-    cd "$SCRIPT_DIR" && exec "$PYTHON" -m loregist.memo "$@"
+    cd "$SCRIPT_DIR" && exec "$PYTHON" -m stashdex.memo "$@"
     ;;
   watch)
-    cd "$SCRIPT_DIR" && exec "$PYTHON" -m loregist.watch "$@"
+    cd "$SCRIPT_DIR" && exec "$PYTHON" -m stashdex.watch "$@"
     ;;
   *)
     echo "사용법: stashdex <embed|search|project|rotate|status|similar|vault-cleanup|catalog-init|catalog|warmup|journal|memo|watch> [옵션]"

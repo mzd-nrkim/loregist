@@ -12,3 +12,7 @@ artifacts/
 # 실 config — 고객 식별자 포함, 커밋 금지 (.example 사용)
 projects.toml
 golden-queries.yaml
+
+# DB 백업 dump — git 커밋 제외 (rsync 발행 제외는 scripts/publish.sh EXCLUDE_PATHS에도 등록 필요)
+infra/backups/
+# rsync는 .gitignore를 무시 — 발행 제외는 EXCLUDE_PATHS(scripts/publish.sh)에도 등록 필요

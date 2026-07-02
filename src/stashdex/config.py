@@ -9,9 +9,9 @@ import tomllib
 DB_CONFIG = {
     "host": "localhost",
     "port": 5433,
-    "dbname": "loregist",
-    "user": "loregist",
-    "password": os.environ.get("LOREGIST_DB_PASSWORD", "vector_local"),
+    "dbname": "stashdex",
+    "user": "stashdex",
+    "password": os.environ.get("STASHDEX_DB_PASSWORD", "vector_local"),
 }
 
 MODEL_NAME = "dragonkue/multilingual-e5-small-ko-v2"
@@ -28,11 +28,11 @@ DEFAULT_EXTENSIONS: list[str] = ["md", "log", "txt"]
 
 MODELS_DIR = Path(__file__).parent.parent.parent / "models"
 
-WORKSPACE = Path(os.environ.get("LOREGIST_WORKSPACE", str(Path.home() / "workspace")))
+WORKSPACE = Path(os.environ.get("STASHDEX_WORKSPACE", str(Path.home() / "workspace")))
 
 PROJECTS_FILE = Path(
-    os.environ.get("LOREGIST_PROJECTS_FILE", "")
-) if os.environ.get("LOREGIST_PROJECTS_FILE") else (
+    os.environ.get("STASHDEX_PROJECTS_FILE", "")
+) if os.environ.get("STASHDEX_PROJECTS_FILE") else (
     Path(__file__).parent.parent.parent / "projects.toml"
 )
 
@@ -316,7 +316,7 @@ except FileNotFoundError as e:
 def infer_project(cwd: str | None = None, explicit: str | None = None) -> str:
     if explicit:
         return explicit
-    cwd = Path(cwd) if cwd else Path(os.environ.get("LOREGIST_CWD", str(Path.cwd())))
+    cwd = Path(cwd) if cwd else Path(os.environ.get("STASHDEX_CWD", str(Path.cwd())))
     # docs_root 및 docs_root.parent 기반 longest-match
     # docs_root 아래에 cwd가 있으면 docs_root.parts로, docs_root.parent 아래에 cwd가 있으면
     # docs_root.parent.parts로 비교 → 더 구체적인 프로젝트를 우선 반환

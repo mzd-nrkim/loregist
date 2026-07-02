@@ -2,8 +2,8 @@
 catalog_gen.py — _wiki 자동 생성·갱신 도구
 
 사용법:
-    python -m loregist.catalog_gen run  --project <프로젝트명>
-    python -m loregist.catalog_gen init --project <프로젝트명> [--force]
+    python -m stashdex.catalog_gen run  --project <프로젝트명>
+    python -m stashdex.catalog_gen init --project <프로젝트명> [--force]
 
 동작 (run):
     1. PROJECTS[project].catalog 경로 아래 *.md 파일의 YAML frontmatter를 파싱
@@ -34,7 +34,7 @@ except ImportError:
     print("[ERROR] pyyaml이 설치되지 않았습니다. `pip install pyyaml`", file=sys.stderr)
     sys.exit(1)
 
-from loregist.config import PROJECTS
+from stashdex.config import PROJECTS
 
 AUTO_START = "<!-- AUTO:START -->"
 AUTO_END = "<!-- AUTO:END -->"

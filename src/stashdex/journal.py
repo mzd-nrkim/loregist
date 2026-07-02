@@ -5,7 +5,7 @@ import datetime
 import sys
 from pathlib import Path
 
-from loregist.config import PROJECTS, infer_project
+from stashdex.config import PROJECTS, infer_project
 
 
 def run_journal(message: str, project: str | None = None) -> Path:

@@ -13,7 +13,7 @@ allowed-tools: Agent, Read
 
 공통 문서 위치: `{docs_root}/../etc/` (= `personal-work/projects/{project}/etc/`)
 
-→ loregist/CLAUDE.md "스킬 공통 — 프로젝트 추론 규칙" 적용
+→ stashdex/CLAUDE.md "스킬 공통 — 프로젝트 추론 규칙" 적용
 
 > etc/ 고정 문서 전용 — 작업문서 추가(add-work), 임의 문서 수정(add-docs), 미래 계획(future-plan)은 별도 스킬 사용.
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# loregist incremental embedding hook
+# stashdex incremental embedding hook
 # 이 파일을 {project-repo}/.git/hooks/post-commit 에 복사(또는 symlink)
 set -e
 
@@ -8,6 +8,6 @@ if [ -z "$CHANGED" ]; then
   exit 0
 fi
 
-LOREGIST_DIR="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
-cd "$LOREGIST_DIR"
-PYTHONPATH="$LOREGIST_DIR/src" .venv/bin/python -m loregist.embed --incremental 2>&1 | tee -a "${LOREGIST_WORKSPACE:-$HOME/workspace}/logvault/embed-log/$(date +%Y-%m-%d).log"
+STASHDEX_DIR="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
+cd "$STASHDEX_DIR"
+PYTHONPATH="$STASHDEX_DIR/src" .venv/bin/python -m stashdex.embed --incremental 2>&1 | tee -a "${STASHDEX_WORKSPACE:-$HOME/workspace}/logvault/embed-log/$(date +%Y-%m-%d).log"

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# loregist 스킬을 ~/.claude/skills/에 심링크로 설치
+# stashdex 스킬을 ~/.claude/skills/에 심링크로 설치
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SKILLS_SRC="$SCRIPT_DIR/.claude/skills"
 SKILLS_DST="$HOME/.claude/skills"
