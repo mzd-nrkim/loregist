@@ -70,14 +70,14 @@ make install
 
 ---
 
-### 3-a. LOREGIST_WORKSPACE 설정
+### 3-a. STASHDEX_WORKSPACE 설정
 
-`LOREGIST_WORKSPACE`는 stashdex가 기록·검색 대상으로 삼을 워크스페이스 루트 경로를 가리키는 환경변수다. 미설정 시 기본값이 사용되지만, 명시 설정을 권장한다.
+`STASHDEX_WORKSPACE`는 stashdex가 기록·검색 대상으로 삼을 워크스페이스 루트 경로를 가리키는 환경변수다. 미설정 시 기본값이 사용되지만, 명시 설정을 권장한다.
 
 **방법 1 — 셸 프로파일 (`.zshrc`)**
 
 ```bash
-echo 'export LOREGIST_WORKSPACE=~/workspace' >> ~/.zshrc
+echo 'export STASHDEX_WORKSPACE=~/workspace' >> ~/.zshrc
 source ~/.zshrc
 ```
 
@@ -90,7 +90,7 @@ Claude Code 세션에서만 적용하려면 프로젝트 루트의 `.claude/sett
 ```json
 {
   "env": {
-    "LOREGIST_WORKSPACE": "/absolute/path/to/workspace"
+    "STASHDEX_WORKSPACE": "/absolute/path/to/workspace"
   }
 }
 ```
